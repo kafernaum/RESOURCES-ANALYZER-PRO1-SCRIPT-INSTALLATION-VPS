@@ -1,0 +1,94 @@
+{
+  "brand": {
+    "name": "RESOURCES-ANALYZER PRO",
+    "subtitle": "La transparence contractuelle au service du peuple",
+    "slogan": "Chaque ressource naturelle appartient au peuple — chaque convention doit le prouver.",
+    "author": "Ahmed ELY Mustapha — Juriste, Expert en Finances Publiques",
+    "domain": "Legal SaaS, Natural Resources, Data Analytics"
+  },
+  "theme": "hybrid_fullstack",
+  "archetype": "The High-End Legal/Data Console (Swiss & High-Contrast mixed with Jewel & Luxury)",
+  "mode": "dark_and_light_toggle",
+  "colors": {
+    "primary": "#1B4332",
+    "secondary": "#D4A017",
+    "tertiary": "#1A3C5E",
+    "alert": "#C0392B",
+    "warning": "#E67E22",
+    "equilibrium": "#27AE60",
+    "dark_bg": "#0D1B12",
+    "light_bg": "#F5F9F5",
+    "text_dark_theme": "#E2E8F0",
+    "text_light_theme": "#1A202C",
+    "borders_dark": "rgba(212, 160, 23, 0.2)",
+    "borders_light": "rgba(27, 67, 50, 0.2)"
+  },
+  "typography": {
+    "headings": "Merriweather",
+    "ui_body": "Inter",
+    "data_numbers": "JetBrains Mono",
+    "rules": [
+      "Headings must use tight letter spacing (tracking-tight) for solemnity and academic rigor.",
+      "Data metrics, KPIs, and dashboard values must ALWAYS be rendered in JetBrains Mono.",
+      "Use explicit contrast checks. Never use pure #000000 or #808080."
+    ]
+  },
+  "layout_and_spacing": {
+    "strategy": "The 'Control Room' Grid",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-4 lg:grid-cols-12",
+    "gap": "gap-4 (tight for high information density like Bloomberg Terminal)",
+    "container_padding": "p-4 md:p-6",
+    "border_radius": "max 4px (rounded-sm) to maintain a solemn, rigorous legal feel.",
+    "ui_surfaces": "Grid Borders (Technical Look). Expose the skeleton for dashboards. Solid or Crystal Glass for headers. Sidebar left collapsible."
+  },
+  "components_strategy": {
+    "tables": "Dense, compact rows. High information density. Text over icons.",
+    "charts": "Shadcn/Recharts for KPI lines, Radar, Donut, Bar, Waterfall, Scatter, Heatmap. Ensure dense and scalable visualizations.",
+    "forms": "Strict Shadcn forms with standard validations. Sharp edges.",
+    "buttons": "Subtle hover states. Hover must be lighter hue. Never use bouncy animations. Use primary green or secondary gold for CTAs.",
+    "badges": "Use alert/warning/equilibrium colors strictly for legal infractions, risks, and compliances."
+  },
+  "motion_and_interactions": {
+    "animations": "Minimalist — micro-interactions for feedback only. No parallax or bouncy effects on dashboards.",
+    "hover_states": "Crisp background transitions, subtle shadow lifts (shadow-sm).",
+    "accessibility": "Always set focus states with clear outlines. Respect prefers-reduced-motion."
+  },
+  "media_and_images": {
+    "image_urls": [
+      {
+        "category": "logo",
+        "description": "RESOURCES-ANALYZER PRO vector logo",
+        "url": "https://static.prod-images.emergentagent.com/jobs/a131cff5-5bf5-43cb-a44a-19c578fbd7c2/images/645f4ee64303182ac9a964361fe909fbd98ff6b49af14ec2a63b8330c265be74.png"
+      },
+      {
+        "category": "hero_background_dark",
+        "description": "Dark architectural background for landing page",
+        "url": "https://static.prod-images.emergentagent.com/jobs/a131cff5-5bf5-43cb-a44a-19c578fbd7c2/images/c986798a6ca8532785b98b37b2dd34878042b17fe68534dbf527d1a5daee971a.png"
+      },
+      {
+        "category": "hero_background_light",
+        "description": "Light architectural background for landing page",
+        "url": "https://static.prod-images.emergentagent.com/jobs/a131cff5-5bf5-43cb-a44a-19c578fbd7c2/images/e72f62f989b3b3f9c6a37952192c665239600a0b3a9458ab7faa612c0b265d0f.png"
+      },
+      {
+        "category": "library_context",
+        "description": "Professional law library for legal context or authentication pages",
+        "url": "https://images.unsplash.com/photo-1752697589012-8ef770ecb38f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBsYXclMjBsaWJyYXJ5fGVufDB8fHx8MTc3NzYzNDU2MXww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "mining_context",
+        "description": "Natural resources mining blocks for dashboard or reports background",
+        "url": "https://images.unsplash.com/photo-1759494373228-f2b9f5d0dc2f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxuYXR1cmFsJTIwcmVzb3VyY2VzJTIwbWluaW5nfGVufDB8fHx8MTc3NzYzNDU2MXww&ixlib=rb-4.1.0&q=85"
+      }
+    ]
+  },
+  "icons_library": "lucide-react",
+  "instructions_to_main_agent": [
+    "Strictly apply the specified color palette and fonts. Do not introduce extraneous colors.",
+    "Implement the UI using React, Tailwind CSS, and customized Shadcn primitives. Ensure sharp edges (max rounded-sm).",
+    "Dashboard components should be highly dense, utilizing JetBrains Mono for all numeric values.",
+    "Ensure all interactive elements have a `data-testid` attribute in kebab-case.",
+    "Header must include a Dark/Light toggle and collapsible left sidebar via lucide-react icons.",
+    "Maintain the bandeau 'DOCUMENT PÉDAGOGIQUE' as non-maskable on legal pages."
+  ]
+}
