@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import {
   Upload, FileText, Loader2, CheckCircle2, AlertCircle, Sparkles,
   Scale, FileSearch, BarChart3, FileBarChart, AlertTriangle, MessageSquareText, Sliders,
-  BookOpen, Globe,
+  BookOpen, Globe, Presentation, Wand2, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import LegalDisclaimer from "../components/LegalDisclaimer";
@@ -19,6 +19,9 @@ import FreeQueryPanel from "../components/FreeQueryPanel";
 import ReportsPanel from "../components/ReportsPanel";
 import BlnPanel from "../components/BlnPanel";
 import CollectionPanel from "../components/CollectionPanel";
+import JurisprudencePanel from "../components/JurisprudencePanel";
+import AmendmentDrafter from "../components/AmendmentDrafter";
+import RblDetector from "../components/RblDetector";
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -144,6 +147,14 @@ export default function ProjectDetail() {
               <span className="font-mono text-xs">{new Date(project.created_at).toLocaleDateString("fr-FR")}</span>
             </div>
           </div>
+          {summary && (
+            <Button onClick={() => nav(`/projects/${id}/presentation`)}
+              className="rounded-sm font-semibold"
+              style={{ background: "#1A3C5E", color: "white" }}
+              data-testid="btn-presentation-mode">
+              <Presentation size={14} className="mr-2" /> Mode Présentation
+            </Button>
+          )}
         </div>
       </div>
 
@@ -155,7 +166,10 @@ export default function ProjectDetail() {
           <TabsTrigger value="documents" data-testid="tab-documents"><FileText size={14} className="mr-1" />Documents</TabsTrigger>
           <TabsTrigger value="analyses" data-testid="tab-analyses"><Scale size={14} className="mr-1" />Analyses</TabsTrigger>
           <TabsTrigger value="bln" data-testid="tab-bln"><BookOpen size={14} className="mr-1" />BLN nationale</TabsTrigger>
+          <TabsTrigger value="jurisprudence" data-testid="tab-jurisprudence"><Scale size={14} className="mr-1" />Jurisprudence</TabsTrigger>
           <TabsTrigger value="diagnostics" data-testid="tab-diagnostics"><AlertTriangle size={14} className="mr-1" />Diagnostics</TabsTrigger>
+          <TabsTrigger value="amendments" data-testid="tab-amendments"><Wand2 size={14} className="mr-1" />Amendements</TabsTrigger>
+          <TabsTrigger value="rbl" data-testid="tab-rbl"><ShieldAlert size={14} className="mr-1" />RBL</TabsTrigger>
           <TabsTrigger value="collection" data-testid="tab-collection"><Globe size={14} className="mr-1" />Collecte auto</TabsTrigger>
           <TabsTrigger value="freequery" data-testid="tab-freequery"><MessageSquareText size={14} className="mr-1" />Requête libre</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports"><FileBarChart size={14} className="mr-1" />Rapports</TabsTrigger>
@@ -293,6 +307,18 @@ export default function ProjectDetail() {
 
         <TabsContent value="bln" className="mt-4">
           <BlnPanel projectId={id} />
+        </TabsContent>
+
+        <TabsContent value="jurisprudence" className="mt-4">
+          <JurisprudencePanel projectId={id} juridique={analyses.juridique} />
+        </TabsContent>
+
+        <TabsContent value="amendments" className="mt-4">
+          <AmendmentDrafter projectId={id} juridique={analyses.juridique} />
+        </TabsContent>
+
+        <TabsContent value="rbl" className="mt-4">
+          <RblDetector projectId={id} />
         </TabsContent>
 
         <TabsContent value="collection" className="mt-4">

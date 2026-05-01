@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { api, API } from "../lib/api";
-import { Download, FileBarChart, Loader2, Building, Scale, Users, Sprout, RefreshCw, GitCompareArrows, Award, FileType, FileSpreadsheet, Archive } from "lucide-react";
+import { Download, FileBarChart, Loader2, Building, Scale, Users, Sprout, RefreshCw, Award, FileType, FileSpreadsheet, Archive } from "lucide-react";
 import { toast } from "sonner";
 
 const PRESETS = [
@@ -10,8 +10,7 @@ const PRESETS = [
   { id: "citoyen", label: "Rapport Citoyen / ONG", desc: "12 pages — infographies + chiffres clés. Pour société civile et journalistes.", icon: Users },
   { id: "environnemental", label: "Rapport Environnemental", desc: "25 pages — SEC détaillé, ODD, risques. Pour ministères et ONG vertes.", icon: Sprout },
   { id: "renegociation", label: "Rapport de Renégociation", desc: "30 pages — formulations alternatives clause par clause. Pour équipes de négociation.", icon: RefreshCw },
-  { id: "comparatif", label: "Rapport Comparatif", desc: "40 pages — conventions multiples côte à côte (à venir).", icon: GitCompareArrows, disabled: true },
-  { id: "rejd", label: "Rapport d'Expertise Juridique Défendable (REJD)", desc: "Produit phare — défendable devant les juridictions et tribunaux arbitraux.", icon: Award, hero: true },
+  { id: "rejd", label: "Rapport d'Expertise Juridique Défendable (REJD)", desc: "Produit phare — 8 parties + 8 annexes. Défendable devant les juridictions et tribunaux arbitraux.", icon: Award, hero: true },
 ];
 
 export default function ReportsPanel({ projectId, hasData }) {
@@ -39,13 +38,14 @@ export default function ReportsPanel({ projectId, hasData }) {
   const generate = async (preset, format = "pdf") => {
     setBusy(`${preset}-${format}`);
     try {
-      const ext = { pdf: "pdf", word: "docx", excel: "xlsx", zip: "zip" }[format];
+      const ext = { pdf: "pdf", word: "docx", excel: "xlsx", zip: "zip", "rejd-complete": "pdf" }[format];
       const path = format === "word" ? "/reports/generate-word"
                 : format === "excel" ? "/reports/generate-excel"
                 : format === "zip" ? "/reports/generate-zip"
+                : format === "rejd-complete" ? "/reports/generate-rejd-complete"
                 : "/reports/generate";
       await downloadFile(path, { project_id: projectId, preset },
-        `rapport_${preset}_${Date.now()}.${ext}`);
+        `rapport_${preset}_${format}_${Date.now()}.${ext}`);
       toast.success(`Rapport ${preset} (${format}) téléchargé`);
     } catch (err) {
       toast.error(err.message || "Erreur");
@@ -95,9 +95,14 @@ export default function ReportsPanel({ projectId, hasData }) {
                 <FileSpreadsheet size={10} className="mr-1" /> Excel
               </FormatButton>
               {p.hero ? (
-                <FormatButton format="zip" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "zip")} hero testid={`gen-${p.id}-zip`}>
-                  <Archive size={10} className="mr-1" /> Pack ZIP
-                </FormatButton>
+                <>
+                  <FormatButton format="zip" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "zip")} hero testid={`gen-${p.id}-zip`}>
+                    <Archive size={10} className="mr-1" /> Pack ZIP
+                  </FormatButton>
+                  <FormatButton format="rejd-complete" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "rejd-complete")} hero testid={`gen-${p.id}-complete`}>
+                    <Award size={10} className="mr-1" /> REJD 8 parties
+                  </FormatButton>
+                </>
               ) : (
                 <div />
               )}

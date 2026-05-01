@@ -37,6 +37,10 @@ from bln_service import (
     search_articles, confront_clauses_with_law,
 )
 from collection_service import collect_all_sources, generate_company_reputation
+from jurisprudence_service import (
+    fragment_decision, search_decisions, generate_argument, rewrite_amendment,
+)
+from reports_rejd_complete import generate_rejd_complete
 
 
 ROOT_DIR = Path(__file__).parent
@@ -717,6 +721,434 @@ async def get_reputation(project_id: str, uid: str = Depends(get_current_user_id
 @api.get("/conventions/models")
 async def list_models():
     return {"items": CONVENTION_MODELS, "demos": DEMO_CONVENTIONS}
+
+
+# ============ MODULE 11 — JURISPRUDENCE NATIONALE ============
+@api.post("/projects/{project_id}/jurisprudence/upload")
+async def upload_jurisprudence(
+    project_id: str,
+    court: str = Form("Cour d'appel"),
+    year: int = Form(2020),
+    file: UploadFile = File(...),
+    uid: str = Depends(get_current_user_id),
+):
+    """Upload a national jurisprudence decision (PDF/DOCX/TXT). Fragmented + indexed."""
+    await _check_project(project_id, uid)
+    content = await file.read()
+    raw_text, _ = extract_document(file.filename, content)
+    if not raw_text or len(raw_text) < 100:
+        raise HTTPException(status_code=400, detail="Texte trop court ou non extractible.")
+    meta = fragment_decision(raw_text, default_court=court, default_year=year)
+    decision = {
+        "id": str(uuid.uuid4()),
+        "project_id": project_id,
+        "user_id": uid,
+        "filename": file.filename,
+        **meta,
+        "scope": "nationale",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.jurisprudence_decisions.insert_one(decision)
+    decision.pop("_id", None)
+    return decision
+
+
+@api.get("/projects/{project_id}/jurisprudence")
+async def list_jurisprudence_project(project_id: str, uid: str = Depends(get_current_user_id)):
+    await _check_project(project_id, uid)
+    items = await db.jurisprudence_decisions.find(
+        {"project_id": project_id}, {"_id": 0, "full_text": 0}
+    ).sort("created_at", -1).to_list(500)
+    return {"items": items, "total": len(items)}
+
+
+@api.delete("/projects/{project_id}/jurisprudence/{decision_id}")
+async def delete_jurisprudence(project_id: str, decision_id: str, uid: str = Depends(get_current_user_id)):
+    await _check_project(project_id, uid)
+    res = await db.jurisprudence_decisions.delete_one({"id": decision_id, "project_id": project_id})
+    return {"deleted": res.deleted_count}
+
+
+@api.post("/projects/{project_id}/jurisprudence/search")
+async def search_jurisprudence_project(
+    project_id: str, payload: dict, uid: str = Depends(get_current_user_id),
+):
+    await _check_project(project_id, uid)
+    query = (payload.get("query") or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Requête vide.")
+    items = await db.jurisprudence_decisions.find({"project_id": project_id}, {"_id": 0}).to_list(2000)
+    # also include international jurisprudence pre-loaded
+    intl = [{
+        "id": f"intl_{i}",
+        "court": j.get("tribunal"),
+        "case_number": "—",
+        "parties": j.get("case_name"),
+        "year": j.get("year"),
+        "ratio_decidendi": j.get("ratio"),
+        "full_text": j.get("ratio"),
+        "scope": "internationale",
+    } for i, j in enumerate(INTERNATIONAL_JURISPRUDENCE)]
+    all_items = items + intl
+    results = search_decisions(query, all_items, top_k=int(payload.get("top_k") or 8))
+    return {"query": query, "results": results}
+
+
+@api.post("/projects/{project_id}/jurisprudence/argument")
+async def generate_argument_endpoint(
+    project_id: str, payload: dict, uid: str = Depends(get_current_user_id),
+):
+    """Generate a defendable argument for a violation, citing national + international jurisprudence."""
+    await _check_project(project_id, uid)
+    violation = payload.get("violation") or {}
+    if not violation:
+        raise HTTPException(status_code=400, detail="Violation manquante.")
+    # search top decisions for the violation context
+    query = (violation.get("nature_violation") or "") + " " + (violation.get("qualification_juridique") or "")
+    nat_items = await db.jurisprudence_decisions.find(
+        {"project_id": project_id}, {"_id": 0}
+    ).to_list(2000)
+    nat_top = search_decisions(query, nat_items, top_k=3) if nat_items else []
+    intl_items = [{
+        "id": f"intl_{i}",
+        "court": j.get("tribunal"),
+        "parties": j.get("case_name"),
+        "year": j.get("year"),
+        "ratio_decidendi": j.get("ratio"),
+        "full_text": j.get("ratio"),
+    } for i, j in enumerate(INTERNATIONAL_JURISPRUDENCE)]
+    intl_top = search_decisions(query, intl_items, top_k=3)
+    res = await generate_argument(violation, nat_top, intl_top, project_id)
+    if "_error" in res:
+        # graceful fallback when LLM budget exceeded
+        msg = str(res["_error"])
+        if "Budget" in msg or "budget" in msg:
+            return {
+                "_warning": "Budget LLM épuisé — voici un argumentaire de repli basé sur la jurisprudence indexée.",
+                "argument_principal": {
+                    "reference_principale": (intl_top[0].get("parties") if intl_top else "—"),
+                    "ratio_decidendi_applicable": (intl_top[0].get("ratio_decidendi") if intl_top else ""),
+                    "analogie_avec_cas_analyse": "Analogie à compléter manuellement.",
+                    "force_argument": "moyenne",
+                },
+                "arguments_secondaires": [{
+                    "reference": d.get("parties"),
+                    "ratio_decidendi": d.get("ratio_decidendi"),
+                    "analogie": "À développer.",
+                } for d in (intl_top[1:] + nat_top)],
+                "contre_arguments_previsibles": [],
+                "doctrine_applicable": ["Pacta sunt servanda", "Souveraineté permanente (Rés. 1803)"],
+                "strategie_contentieuse": "Recours national d'abord, arbitrage international en subsidiaire.",
+                "probabilite_succes_estimee": "moyenne",
+                "juridiction_optimale": "Juridiction nationale puis CIRDI",
+                "prescription_a_respecter": "Vérifier les délais de l'État (typiquement 2-5 ans).",
+            }
+        raise HTTPException(status_code=500, detail=msg)
+    # persist
+    await db.analyses.insert_one({
+        "id": str(uuid.uuid4()),
+        "project_id": project_id,
+        "analysis_type": "jurisprudence_argument",
+        "results": {"violation": violation, "argument": res},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return res
+
+
+@api.post("/projects/{project_id}/amendment/rewrite")
+async def amendment_rewrite_endpoint(
+    project_id: str, payload: dict, uid: str = Depends(get_current_user_id),
+):
+    """Rewrite a clause to make it balanced and conformant with international standards."""
+    proj = await _check_project(project_id, uid)
+    original = (payload.get("original") or "").strip()
+    problem = (payload.get("problem") or "").strip()
+    if not original:
+        raise HTTPException(status_code=400, detail="Clause originale manquante.")
+    res = await rewrite_amendment(
+        original=original,
+        problem=problem,
+        country=proj.get("country", ""),
+        sector=proj.get("sector", ""),
+        resource=proj.get("resource_type", ""),
+        project_id=project_id,
+    )
+    if "_error" in res:
+        msg = str(res["_error"])
+        if "Budget" in msg or "budget" in msg:
+            return {
+                "_warning": "Budget LLM épuisé — fallback basique.",
+                "clause_proposee": (
+                    f"[VERSION RÉÉQUILIBRÉE — À FINALISER PAR UN JURISTE]\n\n"
+                    f"{original}\n\n"
+                    "Ajouter : (i) une clause de revoyure tous les 5 ans ; (ii) un mécanisme "
+                    "de partage équitable des bénéfices ; (iii) un mécanisme de consultation "
+                    "des communautés affectées ; (iv) une clause de conformité aux standards IFC PS5."
+                ),
+                "modifications_clés": [
+                    "Insertion d'une clause de revoyure périodique",
+                    "Renforcement du contenu local",
+                    "Conformité explicite aux standards IFC",
+                ],
+                "justification_juridique": "Art. 21 Charte africaine, Rés. ONU 1803, Vision minière africaine.",
+                "references_normatives": ["Rés. ONU 1803", "Charte africaine Art. 21", "VMA 2009", "IFC PS5"],
+                "leviers_de_negociation": ["Clause de stabilisation limitée", "Audit annuel"],
+                "compromis_alternatifs": [],
+            }
+        raise HTTPException(status_code=500, detail=msg)
+    # persist
+    await db.analyses.insert_one({
+        "id": str(uuid.uuid4()),
+        "project_id": project_id,
+        "analysis_type": "amendment_rewrite",
+        "results": {"original": original, "problem": problem, "rewrite": res},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return res
+
+
+# ============ COMPARATOR (multi-projects) ============
+@api.post("/comparator/run")
+async def comparator_run(payload: dict, uid: str = Depends(get_current_user_id)):
+    """Compare multiple projects (≤4) side-by-side based on their dashboard summaries."""
+    project_ids = payload.get("project_ids") or []
+    if len(project_ids) < 2:
+        raise HTTPException(status_code=400, detail="Sélectionnez au moins 2 projets à comparer.")
+    if len(project_ids) > 4:
+        raise HTTPException(status_code=400, detail="Maximum 4 projets pour la comparaison.")
+    out = []
+    for pid in project_ids:
+        proj = await db.projects.find_one({"id": pid, "user_id": uid}, {"_id": 0})
+        if not proj:
+            continue
+        items = await db.analyses.find({"project_id": pid}, {"_id": 0}).to_list(100)
+        analyses = {a["analysis_type"]: a["results"] for a in items}
+        summary = derive_diagnostics_summary(analyses)
+        out.append({
+            "project": proj,
+            "summary": summary,
+            "financier": analyses.get("financier") or {},
+            "environnemental": analyses.get("environnemental") or {},
+            "social": analyses.get("social") or {},
+            "souverainete": analyses.get("souverainete") or {},
+            "desequilibre": analyses.get("desequilibre") or {},
+        })
+    if len(out) < 2:
+        raise HTTPException(status_code=404, detail="Projets introuvables ou non analysés.")
+    # Compute ranking by global score
+    ranked = sorted(out, key=lambda x: x["summary"].get("score_global", 0), reverse=True)
+    return {"comparisons": out, "ranking": [r["project"]["id"] for r in ranked]}
+
+
+# ============ REJD COMPLET (8 parties + 8 annexes) ============
+@api.post("/reports/generate-rejd-complete")
+async def generate_rejd_complete_endpoint(
+    payload: ReportRequest, uid: str = Depends(get_current_user_id),
+):
+    """Full-blown REJD: 8 parts + 8 annexes, with user watermark for traceability."""
+    proj = await _check_project(payload.project_id, uid)
+    user = await _get_user(uid) or {}
+    items = await db.analyses.find({"project_id": payload.project_id}, {"_id": 0}).to_list(100)
+    analyses = {a["analysis_type"]: a["results"] for a in items}
+    summary = derive_diagnostics_summary(analyses)
+    report_data = {
+        "summary": summary,
+        "juridique": analyses.get("juridique") or {},
+        "diagnostics": analyses.get("diagnostic") or {},
+        "financier": analyses.get("financier") or {},
+        "environnemental": analyses.get("environnemental") or {},
+        "social": analyses.get("social") or {},
+        "souverainete": analyses.get("souverainete") or {},
+        "desequilibre": analyses.get("desequilibre") or {},
+        "bln": analyses.get("bln_confrontation") or {},
+    }
+    user_info = (
+        f"Utilisateur : {user.get('email','—')} · "
+        f"Org : {user.get('organization','—')} · "
+        f"Généré le {datetime.now().strftime('%d/%m/%Y %H:%M')} UTC"
+    )
+    pdf_bytes = generate_rejd_complete(proj, report_data, user_info=user_info)
+    safe_name = (proj.get("name") or "rapport").replace(" ", "_")[:40]
+    fname = f"REJD_COMPLET_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+    )
+
+
+# ============ PRESENTATION MODE (9 slides JSON) ============
+@api.get("/projects/{project_id}/presentation")
+async def get_presentation(project_id: str, uid: str = Depends(get_current_user_id)):
+    """Returns a structured payload for a 9-slide presentation mode."""
+    proj = await _check_project(project_id, uid)
+    items = await db.analyses.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    analyses = {a["analysis_type"]: a["results"] for a in items}
+    summary = derive_diagnostics_summary(analyses)
+    counters = summary.get("compteurs", {})
+    finr = analyses.get("financier") or {}
+    diags = (analyses.get("diagnostic") or {}).get("fiches", [])
+    jur = analyses.get("juridique") or {}
+    slides = [
+        {
+            "n": 1, "kind": "cover",
+            "title": proj.get("name", ""),
+            "subtitle": f"{proj.get('country','')} · {proj.get('sector','').capitalize()} · {proj.get('resource_type','')}",
+            "kicker": "RESOURCES-ANALYZER PRO",
+            "tagline": "La transparence contractuelle au service du peuple",
+            "author": "Méthodologie : Ahmed ELY Mustapha",
+        },
+        {
+            "n": 2, "kind": "verdict",
+            "title": "Verdict global",
+            "score_global": summary.get("score_global", 0),
+            "niveau": summary.get("niveau_global", "attention"),
+            "scores": {
+                "juridique": summary.get("score_juridique", 0),
+                "sec": summary.get("score_sec", 0),
+                "ssc": summary.get("score_ssc", 0),
+                "sos": summary.get("score_sos", 0),
+            },
+        },
+        {
+            "n": 3, "kind": "alerts",
+            "title": "Alertes majeures",
+            "items": [
+                {"label": "Violations critiques", "value": counters.get("violations_critiques", 0), "color": "#C0392B"},
+                {"label": "Violations graves", "value": counters.get("violations_graves", 0), "color": "#E67E22"},
+                {"label": "Clauses abusives", "value": counters.get("clauses_abusives", 0), "color": "#D4A017"},
+                {"label": "Violations droit national", "value": counters.get("violations_droit_national", 0), "color": "#1A3C5E"},
+            ],
+        },
+        {
+            "n": 4, "kind": "financial",
+            "title": "Architecture financière",
+            "valeur_gisement_mrd": round((finr.get("valeur_totale_gisement", 0) or 0) / 1e9, 2),
+            "part_etat_pct": finr.get("part_etat_pct", 0),
+            "manque_a_gagner_total_m": round((finr.get("manque_a_gagner_total", 0) or 0) / 1e6, 1),
+            "manque_a_gagner_an_m": round((finr.get("manque_a_gagner_annuel", 0) or 0) / 1e6, 1),
+            "element_don_pct": round((finr.get("element_don_fiscal", 0) or 0) * 100, 1),
+            "cadeau_fiscal": bool(finr.get("cadeau_fiscal")),
+        },
+        {
+            "n": 5, "kind": "violations",
+            "title": "Violations majeures du droit",
+            "international": [{
+                "norme": v.get("norme_violee", ""),
+                "libelle": v.get("norme_libelle", ""),
+                "gravite": v.get("gravite", ""),
+                "nature": v.get("nature_violation", ""),
+            } for v in (jur.get("violations_droit_international") or [])[:5]],
+            "national": [{
+                "code": v.get("code_national_viole", ""),
+                "article": v.get("article_exact", ""),
+                "gravite": v.get("gravite", ""),
+                "nature": v.get("nature_violation", ""),
+            } for v in (jur.get("violations_droit_national") or [])[:5]],
+        },
+        {
+            "n": 6, "kind": "abuses",
+            "title": "Clauses abusives",
+            "items": [{
+                "type": c.get("type_abus", ""),
+                "gravite": c.get("gravite", ""),
+                "analyse": c.get("analyse", ""),
+            } for c in (jur.get("clauses_abusives") or [])[:6]],
+        },
+        {
+            "n": 7, "kind": "diagnostics",
+            "title": "Top diagnostics & priorités",
+            "items": [{
+                "anomalie": f.get("anomalie", "")[:140],
+                "gravite": f.get("gravite", ""),
+                "priorite": f.get("priorite", ""),
+                "impact": float(f.get("impact_financier_usd") or 0),
+            } for f in diags[:6]],
+        },
+        {
+            "n": 8, "kind": "actions",
+            "title": "6 voies de dénonciation",
+            "voies": [
+                {"label": "① Recours parlementaire", "key": "parlementaire"},
+                {"label": "② Recours judiciaire national", "key": "judiciaire_national"},
+                {"label": "③ Recours constitutionnel", "key": "constitutionnel"},
+                {"label": "④ Arbitrage international", "key": "arbitral_international"},
+                {"label": "⑤ Recours international", "key": "international"},
+                {"label": "⑥ Procédure pénale", "key": "penal"},
+            ],
+            "summary": summary.get("voies_recommandees", []),
+        },
+        {
+            "n": 9, "kind": "conclusion",
+            "title": "Conclusion & next steps",
+            "niveau_global": summary.get("niveau_global", "attention"),
+            "manque_a_gagner_m": round((finr.get("manque_a_gagner_total", 0) or 0) / 1e6, 1),
+            "recommandation": (
+                "Engager une renégociation prioritaire des clauses identifiées et "
+                "mobiliser les voies de recours adaptées au calendrier politique."
+            ),
+            "tagline": "La transparence contractuelle au service du peuple",
+        },
+    ]
+    return {"project": proj, "slides": slides}
+
+
+# ============ RESOURCE-BACKED LOAN DETECTOR ============
+@api.get("/projects/{project_id}/rbl-detector")
+async def rbl_detector(project_id: str, uid: str = Depends(get_current_user_id)):
+    """Heuristic detector for Resource-Backed Loan patterns inside the convention."""
+    await _check_project(project_id, uid)
+    docs = await db.documents.find(
+        {"project_id": project_id, "extracted_data": {"$ne": None}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(5)
+    if not docs:
+        raise HTTPException(status_code=400, detail="Aucun document extrait.")
+    extracted = docs[0].get("extracted_data") or {}
+    raw_excerpt = (docs[0].get("raw_text_excerpt") or "").lower()
+
+    # heuristic markers
+    markers = []
+    keywords = [
+        ("garantie sur ressources", 30),
+        ("nantissement", 20),
+        ("prêt adossé", 35),
+        ("resource-backed", 35),
+        ("avance sur production", 25),
+        ("preneur en gage", 20),
+        ("cession de créance future", 25),
+        ("offtake agreement", 15),
+        ("hypothèque sur permis", 30),
+        ("prepayment", 15),
+        ("escrow account", 10),
+    ]
+    for kw, weight in keywords:
+        if kw in raw_excerpt:
+            markers.append({"keyword": kw, "weight": weight})
+    # Check clauses sensibles
+    for c in (extracted.get("clauses_sensibles") or []):
+        t = (c.get("texte_exact") or "").lower()
+        for kw, weight in keywords:
+            if kw in t:
+                markers.append({"keyword": kw, "weight": weight, "from_clause": c.get("clause_id")})
+    score = min(100, sum(m["weight"] for m in markers))
+    risk = "eleve" if score >= 50 else ("modere" if score >= 20 else "faible")
+    return {
+        "score_rbl": score,
+        "risque": risk,
+        "markers": markers,
+        "explanation": (
+            "Le RBL (Resource-Backed Loan) crée un risque de double aliénation : "
+            "l'État cède la ressource ET emprunte contre elle. Surveiller : "
+            "nantissement, garantie sur permis, offtake long terme à prix fixe, escrow externe."
+        ),
+        "recommandations": [
+            "Exiger la divulgation publique du contrat de prêt sous-jacent.",
+            "Vérifier l'autorisation parlementaire (Constitution).",
+            "Clauses ITIE étendues : publication des paiements liés au RBL.",
+            "Plafonner la durée de l'offtake et indexer le prix.",
+        ],
+    }
 
 
 # ----- Mount + CORS -----

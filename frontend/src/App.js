@@ -18,6 +18,9 @@ import Normative from "@/pages/Normative";
 import Glossary from "@/pages/Glossary";
 import Simulator from "@/pages/Simulator";
 import ConventionModels from "@/pages/ConventionModels";
+import Comparator from "@/pages/Comparator";
+import Jurisprudence from "@/pages/Jurisprudence";
+import Presentation from "@/pages/Presentation";
 import Placeholder from "@/pages/Placeholder";
 
 function App() {
@@ -41,17 +44,22 @@ function App() {
                 <Route path="/projects/:id" element={<ProjectDetail />} />
                 <Route path="/library" element={<Placeholder title="Bibliothèque documentaire globale" subtitle="Téléversez vos documents depuis chaque projet pour le moment." testid="library-page" />} />
                 <Route path="/normative" element={<Normative />} />
-                <Route path="/jurisprudence" element={<Placeholder title="Jurisprudence" subtitle="Consultez la jurisprudence internationale dans le Référentiel normatif." testid="jurisprudence-page" />} />
+                <Route path="/jurisprudence" element={<Jurisprudence />} />
                 <Route path="/analyses" element={<Placeholder title="Analyses" subtitle="Ouvrez un projet pour lancer les analyses." testid="analyses-page" />} />
                 <Route path="/diagnostics" element={<Placeholder title="Diagnostics" subtitle="Ouvrez un projet pour consulter les fiches diagnostic." testid="diagnostics-page" />} />
                 <Route path="/visualizations" element={<Placeholder title="Visualisations" subtitle="Ouvrez un projet pour accéder aux 14 visualisations." testid="visualizations-page" />} />
                 <Route path="/reports" element={<Placeholder title="Rapports" subtitle="Ouvrez un projet pour générer un rapport." testid="reports-page" />} />
                 <Route path="/simulator" element={<Simulator />} />
-                <Route path="/comparator" element={<ConventionModels />} />
+                <Route path="/comparator" element={<Comparator />} />
                 <Route path="/models" element={<ConventionModels />} />
                 <Route path="/glossary" element={<Glossary />} />
                 <Route path="/settings" element={<Placeholder title="Paramètres" subtitle="Profil utilisateur et préférences." testid="settings-page" />} />
               </Route>
+
+              {/* Présentation full-screen (no Layout) */}
+              <Route path="/projects/:id/presentation" element={
+                <ProtectedRoute><Presentation /></ProtectedRoute>
+              } />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
