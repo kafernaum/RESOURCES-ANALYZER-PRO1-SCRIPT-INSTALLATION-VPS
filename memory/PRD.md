@@ -71,31 +71,36 @@ Référentiel pré-chargé (40 normes, 16 jurisprudence, 51 glossaire), Simulate
 
 ## Backlog
 
-### P0 (différé v3)
-- [ ] **REJD complet 8 parties + 8 annexes** (version actuelle = synthétique)
-- [ ] **Mode présentation 9 slides plein écran**
-- [ ] **Comparateur multi-conventions** (côte à côte 2-4 conventions du même secteur)
-- [ ] **Simulateur de renégociation lié à un projet** (impact temps réel sur scores existants)
+### v3 (2026-02) — IMPLÉMENTÉ ✅
+- [x] **REJD complet 8 parties + 8 annexes** (`reports_rejd_complete.py`, route `/api/reports/generate-rejd-complete`, filigrane utilisateur)
+- [x] **Mode présentation 9 slides plein écran** (`/projects/:id/presentation`, navigation clavier, `/api/projects/{id}/presentation`)
+- [x] **Comparateur multi-conventions 2-4 projets** (`/comparator`, `POST /api/comparator/run`, classement automatique, ★ best-in-row)
+- [x] **Module 11 Jurisprudence** : upload décisions nationales, fragmentation, recherche TF-IDF (national + 16 décisions internationales pré-chargées), génération d'arguments défendables GPT-4o avec fallback gracieux
+- [x] **Aide à la rédaction d'amendements** (`AmendmentDrafter`, `POST /api/projects/{id}/amendment/rewrite`) — réécriture clauses + leviers + compromis alternatifs
+- [x] **Resource-Backed Loan Detector** (`RblDetector`, `GET /api/projects/{id}/rbl-detector`) — heuristique 11 marqueurs, score 0-100
+- [x] **Fallback gracieux LLM** : tous les endpoints LLM v3 retournent une réponse structurée avec `_warning` si le budget est épuisé ou autre erreur (jamais 500)
 
-### P1
-- [ ] **Cycle 11** : Upload jurisprudence nationale + recherche TF-IDF + génération automatique d'arguments par violation
-- [ ] **Aide à la rédaction d'amendements** (clause originale → clause proposée GPT-4o)
-- [ ] **Connexion VITAE-PUBLICA + DEBT-ANALYZER PRO** (suite Ahmed ELY Mustapha)
-- [ ] **Resource-Backed Loan Detector** (croisement DEBT/RESOURCES)
+### P1 (à venir)
+- [ ] **Simulateur de renégociation lié à un projet** (impact temps réel sur scores existants)
+- [ ] **Connexion VITAE-PUBLICA + DEBT-ANALYZER PRO** (suite Ahmed ELY Mustapha — RBL inter-app)
+- [ ] **Veille continue** avec alertes email + in-app (cron jobs)
 
 ### P2
-- [ ] **Veille continue** avec alertes email + in-app (cron jobs)
-- [ ] **Filigrane PDF** ID utilisateur + horodatage (traçabilité judiciaire)
+- [x] **Filigrane PDF** ID utilisateur + horodatage (déjà inclus dans REJD complet)
 - [ ] **Audit log** des analyses (qui a généré quoi, quand)
 - [ ] **Export ZIP signé numériquement**
+- [ ] **Refactoring server.py** (1167 lignes) → `/app/backend/routes/{auth,projects,jurisprudence,reports,...}.py`
+- [ ] **Comparator** : retourner les `project_ids` ignorés (auth/404) au lieu de filtrer silencieusement
 
 ## Décisions techniques notables
 
-1. **MongoDB Atlas Vector Search non requis** : remplacé par TF-IDF scikit-learn local (mémoire faible, calcul à la demande, parfait pour textes juridiques courts).
-2. **Universal Key budget exhausted** : la clé d'origine a un budget $3, dépassé pendant les tests étendus. Les utilisateurs doivent recharger via Profile → Universal Key → Add Balance pour les flux GPT-4o (extraction, juridique, diagnostics, requête libre, BLN confrontation). Tous les autres modules fonctionnent sans LLM.
+1. **MongoDB Atlas Vector Search non requis** : remplacé par TF-IDF scikit-learn local (mémoire faible, calcul à la demande, parfait pour textes juridiques courts). Pattern réutilisé pour la jurisprudence v3.
+2. **Universal Key** : budget rechargé en v3 — tous les flux LLM (extraction, juridique, diagnostics, requête libre, BLN confrontation, jurisprudence_argument, amendment_rewrite) fonctionnent. Les endpoints v3 ont un **fallback gracieux** structuré si l'erreur LLM réapparaît (network, parse, budget, …).
 3. **OCR différé** : tesseract.js était dans le prompt initial, mais nécessite Pillow + tesseract binary. Reporté car non critique pour conventions PDF/DOCX numérisées.
+4. **REJD complet** : 8 parties (préambule, présentation, régime juridique, constats clause-par-clause, diagnostic global, solutions, 6 voies de dénonciation, conclusions) + 8 annexes (normes, jurisprudence, fiches diagnostic, données brutes, documents collectés, profil réputation, modèles de recours, glossaire) avec filigrane utilisateur en pied de page de chaque page.
 
 ## Suivi
 
 - 2026-02 : v1 (Cycles 1-7 + bonus) — landing, auth, upload+extraction, 5 analyses, juridique, diagnostics, 12 KPIs + 8 viz, 6 reports PDF, simulateur, glossaire, référentiel.
 - 2026-02 : v2 — 6 viz avancées (Treemap/Scatter/Waterfall/Spider/Timeline/Sankey/Map Leaflet), Word/Excel/ZIP exports, 6 conventions modèles + 6 démos, Module 7 BLN complet (TF-IDF + confrontation), Module 9 Collecte (10 connecteurs + réputation).
+- 2026-02 : v3 — Module 11 Jurisprudence (TF-IDF + LLM arguments), Amendement drafter, Comparateur multi-conventions, Mode Présentation 9 slides, RBL Detector, REJD complet 8 parties + filigrane. Tests : 17/17 backend pytest + 4/4 frontend flows.

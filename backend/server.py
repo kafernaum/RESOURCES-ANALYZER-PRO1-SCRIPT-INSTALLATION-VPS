@@ -820,30 +820,28 @@ async def generate_argument_endpoint(
     intl_top = search_decisions(query, intl_items, top_k=3)
     res = await generate_argument(violation, nat_top, intl_top, project_id)
     if "_error" in res:
-        # graceful fallback when LLM budget exceeded
+        # graceful fallback for any LLM failure (budget, network, parse, 5xx, ...)
         msg = str(res["_error"])
-        if "Budget" in msg or "budget" in msg:
-            return {
-                "_warning": "Budget LLM épuisé — voici un argumentaire de repli basé sur la jurisprudence indexée.",
-                "argument_principal": {
-                    "reference_principale": (intl_top[0].get("parties") if intl_top else "—"),
-                    "ratio_decidendi_applicable": (intl_top[0].get("ratio_decidendi") if intl_top else ""),
-                    "analogie_avec_cas_analyse": "Analogie à compléter manuellement.",
-                    "force_argument": "moyenne",
-                },
-                "arguments_secondaires": [{
-                    "reference": d.get("parties"),
-                    "ratio_decidendi": d.get("ratio_decidendi"),
-                    "analogie": "À développer.",
-                } for d in (intl_top[1:] + nat_top)],
-                "contre_arguments_previsibles": [],
-                "doctrine_applicable": ["Pacta sunt servanda", "Souveraineté permanente (Rés. 1803)"],
-                "strategie_contentieuse": "Recours national d'abord, arbitrage international en subsidiaire.",
-                "probabilite_succes_estimee": "moyenne",
-                "juridiction_optimale": "Juridiction nationale puis CIRDI",
-                "prescription_a_respecter": "Vérifier les délais de l'État (typiquement 2-5 ans).",
-            }
-        raise HTTPException(status_code=500, detail=msg)
+        return {
+            "_warning": f"Argumentaire LLM indisponible ({msg[:140]}) — fallback basé sur la jurisprudence indexée.",
+            "argument_principal": {
+                "reference_principale": (intl_top[0].get("parties") if intl_top else "—"),
+                "ratio_decidendi_applicable": (intl_top[0].get("ratio_decidendi") if intl_top else ""),
+                "analogie_avec_cas_analyse": "Analogie à compléter manuellement.",
+                "force_argument": "moyenne",
+            },
+            "arguments_secondaires": [{
+                "reference": d.get("parties"),
+                "ratio_decidendi": d.get("ratio_decidendi"),
+                "analogie": "À développer.",
+            } for d in (intl_top[1:] + nat_top)],
+            "contre_arguments_previsibles": [],
+            "doctrine_applicable": ["Pacta sunt servanda", "Souveraineté permanente (Rés. 1803)"],
+            "strategie_contentieuse": "Recours national d'abord, arbitrage international en subsidiaire.",
+            "probabilite_succes_estimee": "moyenne",
+            "juridiction_optimale": "Juridiction nationale puis CIRDI",
+            "prescription_a_respecter": "Vérifier les délais de l'État (typiquement 2-5 ans).",
+        }
     # persist
     await db.analyses.insert_one({
         "id": str(uuid.uuid4()),
@@ -875,27 +873,25 @@ async def amendment_rewrite_endpoint(
     )
     if "_error" in res:
         msg = str(res["_error"])
-        if "Budget" in msg or "budget" in msg:
-            return {
-                "_warning": "Budget LLM épuisé — fallback basique.",
-                "clause_proposee": (
-                    f"[VERSION RÉÉQUILIBRÉE — À FINALISER PAR UN JURISTE]\n\n"
-                    f"{original}\n\n"
-                    "Ajouter : (i) une clause de revoyure tous les 5 ans ; (ii) un mécanisme "
-                    "de partage équitable des bénéfices ; (iii) un mécanisme de consultation "
-                    "des communautés affectées ; (iv) une clause de conformité aux standards IFC PS5."
-                ),
-                "modifications_clés": [
-                    "Insertion d'une clause de revoyure périodique",
-                    "Renforcement du contenu local",
-                    "Conformité explicite aux standards IFC",
-                ],
-                "justification_juridique": "Art. 21 Charte africaine, Rés. ONU 1803, Vision minière africaine.",
-                "references_normatives": ["Rés. ONU 1803", "Charte africaine Art. 21", "VMA 2009", "IFC PS5"],
-                "leviers_de_negociation": ["Clause de stabilisation limitée", "Audit annuel"],
-                "compromis_alternatifs": [],
-            }
-        raise HTTPException(status_code=500, detail=msg)
+        return {
+            "_warning": f"Amendement LLM indisponible ({msg[:140]}) — fallback basique.",
+            "clause_proposee": (
+                f"[VERSION RÉÉQUILIBRÉE — À FINALISER PAR UN JURISTE]\n\n"
+                f"{original}\n\n"
+                "Ajouter : (i) une clause de revoyure tous les 5 ans ; (ii) un mécanisme "
+                "de partage équitable des bénéfices ; (iii) un mécanisme de consultation "
+                "des communautés affectées ; (iv) une clause de conformité aux standards IFC PS5."
+            ),
+            "modifications_clés": [
+                "Insertion d'une clause de revoyure périodique",
+                "Renforcement du contenu local",
+                "Conformité explicite aux standards IFC",
+            ],
+            "justification_juridique": "Art. 21 Charte africaine, Rés. ONU 1803, Vision minière africaine.",
+            "references_normatives": ["Rés. ONU 1803", "Charte africaine Art. 21", "VMA 2009", "IFC PS5"],
+            "leviers_de_negociation": ["Clause de stabilisation limitée", "Audit annuel"],
+            "compromis_alternatifs": [],
+        }
     # persist
     await db.analyses.insert_one({
         "id": str(uuid.uuid4()),

@@ -70,12 +70,16 @@ export default function Comparator() {
           })}
         </div>
         <Button onClick={run} disabled={busy || selected.length < 2}
+          title={selected.length < 2 ? "Sélectionnez au moins 2 projets" : ""}
           className="mt-4 rounded-sm font-semibold"
           style={{ background: "#1B4332", color: "white" }}
           data-testid="comp-run-btn">
           {busy ? <Loader2 size={14} className="mr-2 animate-spin" /> : <GitCompareArrows size={14} className="mr-2" />}
           Comparer
         </Button>
+        {selected.length < 2 && (
+          <span className="ml-3 text-xs opacity-60">Sélectionnez au moins 2 projets</span>
+        )}
       </div>
 
       {result && <ComparisonView result={result} />}
