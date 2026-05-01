@@ -17,6 +17,7 @@ import ProjectDetail from "@/pages/ProjectDetail";
 import Normative from "@/pages/Normative";
 import Glossary from "@/pages/Glossary";
 import Simulator from "@/pages/Simulator";
+import ConventionModels from "@/pages/ConventionModels";
 import Placeholder from "@/pages/Placeholder";
 
 function App() {
@@ -46,7 +47,8 @@ function App() {
                 <Route path="/visualizations" element={<Placeholder title="Visualisations" subtitle="Ouvrez un projet pour accéder aux 14 visualisations." testid="visualizations-page" />} />
                 <Route path="/reports" element={<Placeholder title="Rapports" subtitle="Ouvrez un projet pour générer un rapport." testid="reports-page" />} />
                 <Route path="/simulator" element={<Simulator />} />
-                <Route path="/comparator" element={<Placeholder title="Comparateur de conventions" subtitle="Disponible dans une prochaine version." testid="comparator-page" />} />
+                <Route path="/comparator" element={<ConventionModels />} />
+                <Route path="/models" element={<ConventionModels />} />
                 <Route path="/glossary" element={<Glossary />} />
                 <Route path="/settings" element={<Placeholder title="Paramètres" subtitle="Profil utilisateur et préférences." testid="settings-page" />} />
               </Route>

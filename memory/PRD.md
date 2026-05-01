@@ -7,67 +7,95 @@ Application web full-stack d'analyse des conventions d'exploitation des ressourc
 juridiques, déséquilibres contractuels, atteintes à la souveraineté. Auteur méthodologique :
 Ahmed ELY Mustapha — Juriste, Expert en Finances Publiques.
 
-Stack imposée par l'utilisateur : React + Tailwind + shadcn/ui + Recharts/Chart.js (frontend),
-Node.js Express + Supabase pgvector (backend). **Adaptation Emergent** : FastAPI + MongoDB
-(stack native), avec passage en MongoDB Atlas Vector Search ou pgvector au cycle 10.
+Stack adaptée : FastAPI + MongoDB + React (au lieu du Node + Supabase pgvector initial).
 
 ## Personas cibles
 
 | Persona | Besoin clé |
 |---|---|
-| Juriste / Avocat | Rapport REJD défendable, citations exactes des clauses, jurisprudence applicable |
-| Parlementaire | Synthèse pédagogique, alertes, recours parlementaire |
-| Gouvernement (négociateur) | Rapport de renégociation avec formulations alternatives |
-| ONG / Société civile | Infographies, chiffres clés, points de communication |
+| Juriste / Avocat | REJD défendable + Word éditable + jurisprudence |
+| Parlementaire | Synthèse pédagogique + recours parlementaire |
+| Gouvernement | Renégociation avec formulations alternatives |
+| ONG / Société civile | Infographies + chiffres clés + Global Witness alerts |
 | Citoyen | Vulgarisation, slogan, transparence |
 | Chercheur | Données brutes JSON, comparatifs multi-conventions |
 
-## Architecture choisie
+## Architecture
 
-- **Frontend** : React 19, Tailwind, shadcn/ui, Recharts, lucide-react.
-- **Backend** : FastAPI + motor (MongoDB async).
-- **Auth** : JWT (PyJWT) + bcrypt.
-- **LLM** : GPT-4o via `emergentintegrations` (Universal Key déjà configurée).
-- **Extraction** : pypdf, python-docx, openpyxl.
-- **Reports** : reportlab (PDF).
+- **Frontend** : React 19 + Tailwind + shadcn/ui + Recharts + react-leaflet
+- **Backend** : FastAPI + motor (MongoDB async)
+- **Auth** : JWT + bcrypt
+- **LLM** : GPT-4o via emergentintegrations (Universal Key)
+- **Recherche BLN** : TF-IDF (scikit-learn) — local, sans API, parfait pour articles juridiques en français
+- **Extraction docs** : pypdf, python-docx, openpyxl
+- **Reports** : reportlab (PDF) + python-docx (Word) + openpyxl (Excel) + zipfile (ZIP pack)
 
-## Implémentation v1 (cycles 1-7 + bonus) — livrée le 2026-02
+## Implémenté en v1 (2026-02)
 
-- Auth JWT (register, login, me) avec 6 rôles.
-- Sidebar collapsible, header dark/light toggle, branding RESOURCES-ANALYZER PRO complet.
-- Landing brandée (hero, 6 features, CTA, footer).
-- CRUD Projets avec secteur (mines/pétrole/gaz/maritime/forêt/mixte).
-- Upload multi-fichiers PDF/DOCX/XLSX/CSV/TXT, classification A1-E6.
-- Extraction GPT-4o stricte JSON mode (1 appel/document, cache MongoDB).
-- 5 analyses déterministes (ZERO LLM) : Financier (juste valeur, manque à gagner, scénarios prix), SEC (8 composantes), SSC (7 composantes), IDC (7 dimensions), SOS (5 composantes).
-- Analyse juridique GPT-4o (1 appel groupé, cache) — violations droit international + national + clauses abusives.
-- Génération fiches diagnostic GPT-4o (1 appel groupé) avec qualification, jurisprudence, solutions, 6 voies de dénonciation.
-- Dashboard avec 12 KPI cards (3 rangées) + 8 visualisations Recharts (Radar 6 axes, Donut, Bar benchmark, Line scénarios, Bar violations, IDC bars, SEC bars, SSC bars).
-- Référentiel normatif pré-chargé (37 entrées N1-N6 + D1-D8) + Jurisprudence internationale (16 affaires) + Glossaire 50+ termes — interface de consultation avec recherche.
-- Requêtes libres GPT-4o avec historique.
-- Simulateur de renégociation temps réel (sliders).
-- Rapports PDF (reportlab) : Parlementaire, Juridique, Citoyen, Environnemental, Renégociation, REJD synthétique.
-- Avertissement légal non masquable sur toutes les pages juridiques et tous les rapports.
+Cycles 1-7 : Auth/Sidebar/Landing, Upload+Extraction GPT-4o, 5 analyses ZERO LLM (Financier/SEC/SSC/IDC/SOS),
+Analyse juridique GPT-4o, Diagnostics GPT-4o, Dashboard 12 KPIs + 8 visualisations Recharts,
+Référentiel pré-chargé (40 normes, 16 jurisprudence, 51 glossaire), Simulateur, Reports PDF (6 presets).
 
-## Backlog priorisé
+## Implémenté en v2 (2026-02)
 
-### P0 (à faire en priorité v2)
+### Cycle 6 — Visualisations avancées
+- ✅ **Treemap** des clauses (gravité × type)
+- ✅ **Scatter** clauses (gravité × type avec quadrants)
+- ✅ **Waterfall** décomposition recettes État
+- ✅ **Spider** obligations sociales (Convention vs cible)
+- ✅ **Timeline AreaChart** calendrier obligations
+- ✅ **Sankey-like** flux des ressources État/Entreprise
+- ✅ **Map Leaflet** localisation de la zone de concession (centroïdes pays africains)
 
-- [ ] **Cycle 6 — 6 visualisations restantes** : Treemap clauses (D3), Waterfall flux revenus, Scatter clauses abusives (gravité × impact), Heatmap calendrier obligations, Sankey flux ressources (D3), Map Leaflet zone concession, Spider obligations sociales, Infographie A3 PNG 300 DPI.
-- [ ] **Cycle 7 — Exports avancés** : Word docx (`python-docx`), Excel xlsx multi-onglets (openpyxl), ZIP pack REJD complet.
-- [ ] **REJD complet** : 8 parties + 8 annexes (vs version synthétique actuelle).
+### Cycle 7 — Exports avancés
+- ✅ **Word docx éditable** (python-docx) — sections complètes, tables stylisées
+- ✅ **Excel multi-onglets** (openpyxl) — Synthèse / Violations / Diagnostics / Financier
+- ✅ **ZIP pack REJD** complet (PDF + Word + Excel + JSON brut + README)
+
+### Cycle 8 — Conventions modèles
+- ✅ **6 conventions modèles** : PSA AIPN, NRGI Mining, CNUDM Maritime, REDD+ Forêt, Vision Africaine, JV CNUCED
+- ✅ **6 conventions de démonstration** : Tasiast, Simandou, Jubilee, Rovuma, NLNG, GTA
+- ✅ Page dédiée `/models` avec scores de conformité 85-92/100
+
+### Cycle 10 — Module 7 BLN (Bibliothèque Législative Nationale)
+- ✅ Upload textes nationaux (12 codes : Constitution, mines, hydrocarbures, env, eau, pénal, invest, travail, foncier, MP, ITIE, anti-corruption)
+- ✅ Fragmentation automatique par articles (regex multi-pattern)
+- ✅ Recherche **TF-IDF cosinus** locale (scikit-learn, stopwords français, ngram 1-2) — pas d'API needed
+- ✅ Confrontation convention/loi via 1 appel GPT-4o groupé (cached)
+- ✅ Détection des dérogations illégales (fiscale/environnementale/foncière/procédurale/pénale)
+
+### Cycle 12 — Module 9 Collecte automatique
+- ✅ **10 connecteurs** : ResourceContracts.org (API réelle), ITIE, FMI, Banque Mondiale, CIRDI, PWYP, Global Witness, Légifrance, OHADA, OpenAlex (API réelle)
+- ✅ **Profil de réputation** des sociétés contractantes (heuristique + liens vers OFAC/OCCRP/PWYP/ICIJ)
+- ✅ Interface de validation par item (ajouter/ignorer)
+
+## Backlog
+
+### P0 (différé v3)
+- [ ] **REJD complet 8 parties + 8 annexes** (version actuelle = synthétique)
+- [ ] **Mode présentation 9 slides plein écran**
+- [ ] **Comparateur multi-conventions** (côte à côte 2-4 conventions du même secteur)
+- [ ] **Simulateur de renégociation lié à un projet** (impact temps réel sur scores existants)
 
 ### P1
-
-- [ ] **Cycle 8** : Comparateur multi-conventions, bibliothèque conventions modèles (10 modèles), mode présentation plein écran 9 slides, aide à la rédaction d'amendements.
-- [ ] **Cycle 10 — Module 7 BLN** : Indexation articles législatifs nationaux uploadés + embeddings ada-002 + recherche vectorielle + confrontation convention/loi + détection dérogations illégales.
-- [ ] **Cycle 11 — Module 8 Jurisprudence** : Upload jurisprudence nationale + recherche sémantique 4 niveaux + génération automatique d'arguments jurisprudentiels par violation.
+- [ ] **Cycle 11** : Upload jurisprudence nationale + recherche TF-IDF + génération automatique d'arguments par violation
+- [ ] **Aide à la rédaction d'amendements** (clause originale → clause proposée GPT-4o)
+- [ ] **Connexion VITAE-PUBLICA + DEBT-ANALYZER PRO** (suite Ahmed ELY Mustapha)
+- [ ] **Resource-Backed Loan Detector** (croisement DEBT/RESOURCES)
 
 ### P2
+- [ ] **Veille continue** avec alertes email + in-app (cron jobs)
+- [ ] **Filigrane PDF** ID utilisateur + horodatage (traçabilité judiciaire)
+- [ ] **Audit log** des analyses (qui a généré quoi, quand)
+- [ ] **Export ZIP signé numériquement**
 
-- [ ] **Cycle 12 — Module 9 Collecte automatique** : 10 connecteurs (ResourceContracts.org, ITIE, FMI, BM, CIRDI, PWYP, Global Witness, Légifrance, OHADA, OpenAlex) + veille continue + alertes + profils de réputation des sociétés.
-- [ ] **Cycle 13 — Suite** : Connexion VITAE-PUBLICA + DEBT-ANALYZER PRO + Resource-Backed Loan Detector.
+## Décisions techniques notables
+
+1. **MongoDB Atlas Vector Search non requis** : remplacé par TF-IDF scikit-learn local (mémoire faible, calcul à la demande, parfait pour textes juridiques courts).
+2. **Universal Key budget exhausted** : la clé d'origine a un budget $3, dépassé pendant les tests étendus. Les utilisateurs doivent recharger via Profile → Universal Key → Add Balance pour les flux GPT-4o (extraction, juridique, diagnostics, requête libre, BLN confrontation). Tous les autres modules fonctionnent sans LLM.
+3. **OCR différé** : tesseract.js était dans le prompt initial, mais nécessite Pillow + tesseract binary. Reporté car non critique pour conventions PDF/DOCX numérisées.
 
 ## Suivi
 
-- 2026-02 : Livraison initiale v1 (Cycles 1-7 + bonus).
+- 2026-02 : v1 (Cycles 1-7 + bonus) — landing, auth, upload+extraction, 5 analyses, juridique, diagnostics, 12 KPIs + 8 viz, 6 reports PDF, simulateur, glossaire, référentiel.
+- 2026-02 : v2 — 6 viz avancées (Treemap/Scatter/Waterfall/Spider/Timeline/Sankey/Map Leaflet), Word/Excel/ZIP exports, 6 conventions modèles + 6 démos, Module 7 BLN complet (TF-IDF + confrontation), Module 9 Collecte (10 connecteurs + réputation).

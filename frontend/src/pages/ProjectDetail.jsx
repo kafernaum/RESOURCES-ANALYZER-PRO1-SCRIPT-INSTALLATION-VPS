@@ -6,14 +6,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import {
   Upload, FileText, Loader2, CheckCircle2, AlertCircle, Sparkles,
   Scale, FileSearch, BarChart3, FileBarChart, AlertTriangle, MessageSquareText, Sliders,
+  BookOpen, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import LegalDisclaimer from "../components/LegalDisclaimer";
 import KpiSummary from "../components/visualizations/KpiSummary";
 import VizGrid from "../components/visualizations/VizGrid";
+import AdvancedViz from "../components/visualizations/AdvancedViz";
+import ConcessionMap from "../components/visualizations/ConcessionMap";
 import DiagnosticsList from "../components/DiagnosticsList";
 import FreeQueryPanel from "../components/FreeQueryPanel";
 import ReportsPanel from "../components/ReportsPanel";
+import BlnPanel from "../components/BlnPanel";
+import CollectionPanel from "../components/CollectionPanel";
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -145,11 +150,13 @@ export default function ProjectDetail() {
       <LegalDisclaimer compact />
 
       <Tabs defaultValue="overview" className="mt-4">
-        <TabsList className="rounded-sm">
+        <TabsList className="rounded-sm flex-wrap h-auto">
           <TabsTrigger value="overview" data-testid="tab-overview"><BarChart3 size={14} className="mr-1" />Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="documents" data-testid="tab-documents"><FileText size={14} className="mr-1" />Documents</TabsTrigger>
           <TabsTrigger value="analyses" data-testid="tab-analyses"><Scale size={14} className="mr-1" />Analyses</TabsTrigger>
+          <TabsTrigger value="bln" data-testid="tab-bln"><BookOpen size={14} className="mr-1" />BLN nationale</TabsTrigger>
           <TabsTrigger value="diagnostics" data-testid="tab-diagnostics"><AlertTriangle size={14} className="mr-1" />Diagnostics</TabsTrigger>
+          <TabsTrigger value="collection" data-testid="tab-collection"><Globe size={14} className="mr-1" />Collecte auto</TabsTrigger>
           <TabsTrigger value="freequery" data-testid="tab-freequery"><MessageSquareText size={14} className="mr-1" />Requête libre</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports"><FileBarChart size={14} className="mr-1" />Rapports</TabsTrigger>
         </TabsList>
@@ -282,6 +289,14 @@ export default function ProjectDetail() {
         <TabsContent value="diagnostics" className="mt-4">
           <DiagnosticsList diagnostics={analyses.diagnostic} canGenerate={hasJuridique && !hasDiagnostics}
             onGenerate={runDiagnostics} busy={busy.diag} />
+        </TabsContent>
+
+        <TabsContent value="bln" className="mt-4">
+          <BlnPanel projectId={id} />
+        </TabsContent>
+
+        <TabsContent value="collection" className="mt-4">
+          <CollectionPanel projectId={id} />
         </TabsContent>
 
         <TabsContent value="freequery" className="mt-4">

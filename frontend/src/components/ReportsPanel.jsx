@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { api, API } from "../lib/api";
-import { Download, FileBarChart, Loader2, Building, Scale, Users, Sprout, RefreshCw, GitCompareArrows, Award } from "lucide-react";
+import { Download, FileBarChart, Loader2, Building, Scale, Users, Sprout, RefreshCw, GitCompareArrows, Award, FileType, FileSpreadsheet, Archive } from "lucide-react";
 import { toast } from "sonner";
 
 const PRESETS = [
@@ -17,30 +17,36 @@ const PRESETS = [
 export default function ReportsPanel({ projectId, hasData }) {
   const [busy, setBusy] = useState(null);
 
-  const generate = async (preset) => {
-    setBusy(preset);
+  const downloadFile = async (path, body, filename) => {
+    const token = localStorage.getItem("rap_token");
+    const res = await fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Erreur génération");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generate = async (preset, format = "pdf") => {
+    setBusy(`${preset}-${format}`);
     try {
-      const token = localStorage.getItem("rap_token");
-      const res = await fetch(`${API}/reports/generate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ project_id: projectId, preset }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Erreur génération");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `rapport_${preset}_${Date.now()}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Rapport ${preset} téléchargé`);
+      const ext = { pdf: "pdf", word: "docx", excel: "xlsx", zip: "zip" }[format];
+      const path = format === "word" ? "/reports/generate-word"
+                : format === "excel" ? "/reports/generate-excel"
+                : format === "zip" ? "/reports/generate-zip"
+                : "/reports/generate";
+      await downloadFile(path, { project_id: projectId, preset },
+        `rapport_${preset}_${Date.now()}.${ext}`);
+      toast.success(`Rapport ${preset} (${format}) téléchargé`);
     } catch (err) {
       toast.error(err.message || "Erreur");
     } finally { setBusy(null); }
@@ -61,7 +67,7 @@ export default function ReportsPanel({ projectId, hasData }) {
     <div className="space-y-3" data-testid="reports-panel">
       <div className="rap-card p-5">
         <h2 className="font-display text-lg font-bold mb-1">Rapports exportables</h2>
-        <p className="text-xs opacity-70">Choisissez le preset adapté à votre destinataire.</p>
+        <p className="text-xs opacity-70">Choisissez le preset adapté à votre destinataire. PDF, Word éditable, Excel multi-onglets ou Pack ZIP complet (REJD).</p>
       </div>
       <div className="grid md:grid-cols-2 gap-3">
         {PRESETS.map((p) => (
@@ -78,16 +84,40 @@ export default function ReportsPanel({ projectId, hasData }) {
             </div>
             <h3 className="font-display font-bold text-sm mb-1">{p.label}</h3>
             <p className="text-xs opacity-70 mb-3 leading-relaxed">{p.desc}</p>
-            <Button onClick={() => generate(p.id)} disabled={p.disabled || busy === p.id}
-              size="sm" className="rounded-sm w-full"
-              style={p.hero ? { background: "#D4A017", color: "#0D1B12" } : { background: "#1B4332", color: "white" }}
-              data-testid={`generate-report-${p.id}`}>
-              {busy === p.id ? <Loader2 size={12} className="mr-2 animate-spin" /> : <Download size={12} className="mr-2" />}
-              {p.disabled ? "Bientôt disponible" : "Télécharger PDF"}
-            </Button>
+            <div className="grid grid-cols-2 gap-1.5">
+              <FormatButton format="pdf" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "pdf")} hero={p.hero} testid={`gen-${p.id}-pdf`}>
+                <Download size={10} className="mr-1" /> PDF
+              </FormatButton>
+              <FormatButton format="word" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "word")} testid={`gen-${p.id}-word`}>
+                <FileType size={10} className="mr-1" /> Word
+              </FormatButton>
+              <FormatButton format="excel" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "excel")} testid={`gen-${p.id}-excel`}>
+                <FileSpreadsheet size={10} className="mr-1" /> Excel
+              </FormatButton>
+              {p.hero ? (
+                <FormatButton format="zip" preset={p.id} disabled={p.disabled} busy={busy} onClick={() => generate(p.id, "zip")} hero testid={`gen-${p.id}-zip`}>
+                  <Archive size={10} className="mr-1" /> Pack ZIP
+                </FormatButton>
+              ) : (
+                <div />
+              )}
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+function FormatButton({ format, preset, disabled, busy, onClick, hero, children, testid }) {
+  const isBusy = busy === `${preset}-${format}`;
+  return (
+    <Button onClick={onClick} disabled={disabled || isBusy}
+      size="sm" className="rounded-sm text-[11px] h-8"
+      style={hero ? { background: "#D4A017", color: "#0D1B12" } : { background: "#1B4332", color: "white" }}
+      data-testid={testid}>
+      {isBusy ? <Loader2 size={10} className="mr-1 animate-spin" /> : children}
+    </Button>
+  );
+}
+

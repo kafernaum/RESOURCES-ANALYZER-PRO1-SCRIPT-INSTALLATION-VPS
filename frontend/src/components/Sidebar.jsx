@@ -21,7 +21,7 @@ const NAV = [
   { to: "/reports", label: "Rapports", icon: FileBarChart, testid: "nav-reports" },
   { type: "div" },
   { to: "/simulator", label: "Simulateur de renégociation", icon: Sliders, testid: "nav-simulator" },
-  { to: "/comparator", label: "Comparateur", icon: GitCompareArrows, testid: "nav-comparator" },
+  { to: "/models", label: "Conventions modèles", icon: GitCompareArrows, testid: "nav-models" },
   { to: "/glossary", label: "Glossaire", icon: HelpCircle, testid: "nav-glossary" },
 ];
 
