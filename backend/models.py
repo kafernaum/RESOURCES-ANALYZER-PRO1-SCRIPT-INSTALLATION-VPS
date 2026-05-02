@@ -146,3 +146,13 @@ class SimulatorRequest(BaseModel):
     state_share_psa: float = 60.0
     production_annual: float = 1000000  # tons or barrels/year
     price: float = 100  # USD/unit
+
+
+class SimulatorOverride(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    royalty_rate: Optional[float] = None
+    is_rate: Optional[float] = None
+    state_share_psa: Optional[float] = None
+    duration_years: Optional[float] = None
+    production_annual: Optional[float] = None
+    price: Optional[float] = None

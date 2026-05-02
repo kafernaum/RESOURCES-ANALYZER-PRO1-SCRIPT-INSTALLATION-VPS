@@ -80,17 +80,22 @@ Référentiel pré-chargé (40 normes, 16 jurisprudence, 51 glossaire), Simulate
 - [x] **Resource-Backed Loan Detector** (`RblDetector`, `GET /api/projects/{id}/rbl-detector`) — heuristique 11 marqueurs, score 0-100
 - [x] **Fallback gracieux LLM** : tous les endpoints LLM v3 retournent une réponse structurée avec `_warning` si le budget est épuisé ou autre erreur (jamais 500)
 
+### v4 (2026-02) — IMPLÉMENTÉ ✅
+- [x] **Simulateur lié à un projet** (`ProjectSimulator`, `POST /api/projects/{id}/simulator/run`) : baseline auto-extrait depuis la convention, diff temps réel baseline vs proposé (royalties, IS, part-État, manque à gagner) avec Pydantic validation
+- [x] **Journal d'audit** (`/audit`, `GET /api/audit`) : traçabilité fire-and-forget de toutes les actions (projet, document, extraction, rapport, simulation, cross-check, verdict partagé)
+- [x] **Partager le verdict** (`POST /api/reports/generate-share-verdict`) : mini-PDF 1 page avec score géant + 3 alertes phares + impact éco + QR code vers le projet — bouton hero dans Reports + icône dans Mode Présentation
+- [x] **Suite Ahmed ELY Mustapha** (`SuiteConnect`, `/api/suite/status` + `/api/projects/{id}/suite/cross-check`) : scaffolding VITAE-PUBLICA + DEBT-ANALYZER PRO avec fallback gracieux `not_configured` tant que les env vars ne sont pas définies
+- [x] **Comparator** : retourne `skipped_ids[]` pour les projets filtrés silencieusement (auth/404)
+- [x] **Validation Pydantic** sur le simulateur (`SimulatorOverride`) — 422 propre au lieu de 500 en cas d'entrée invalide
+
 ### P1 (à venir)
-- [ ] **Simulateur de renégociation lié à un projet** (impact temps réel sur scores existants)
-- [ ] **Connexion VITAE-PUBLICA + DEBT-ANALYZER PRO** (suite Ahmed ELY Mustapha — RBL inter-app)
-- [ ] **Veille continue** avec alertes email + in-app (cron jobs)
+- [ ] **Intégration réelle VITAE-PUBLICA + DEBT-ANALYZER PRO** (quand les URL+tokens sont fournis)
+- [ ] **Veille continue** avec alertes email + in-app (cron jobs, SendGrid/Resend)
 
 ### P2
-- [x] **Filigrane PDF** ID utilisateur + horodatage (déjà inclus dans REJD complet)
-- [ ] **Audit log** des analyses (qui a généré quoi, quand)
+- [x] **Filigrane PDF** ID utilisateur + horodatage (déjà inclus dans REJD complet et Share Verdict)
 - [ ] **Export ZIP signé numériquement**
-- [ ] **Refactoring server.py** (1167 lignes) → `/app/backend/routes/{auth,projects,jurisprudence,reports,...}.py`
-- [ ] **Comparator** : retourner les `project_ids` ignorés (auth/404) au lieu de filtrer silencieusement
+- [ ] **Refactoring server.py** (1365 lignes) → `/app/backend/routes/{auth,projects,jurisprudence,reports,...}.py`
 
 ## Décisions techniques notables
 
@@ -104,3 +109,4 @@ Référentiel pré-chargé (40 normes, 16 jurisprudence, 51 glossaire), Simulate
 - 2026-02 : v1 (Cycles 1-7 + bonus) — landing, auth, upload+extraction, 5 analyses, juridique, diagnostics, 12 KPIs + 8 viz, 6 reports PDF, simulateur, glossaire, référentiel.
 - 2026-02 : v2 — 6 viz avancées (Treemap/Scatter/Waterfall/Spider/Timeline/Sankey/Map Leaflet), Word/Excel/ZIP exports, 6 conventions modèles + 6 démos, Module 7 BLN complet (TF-IDF + confrontation), Module 9 Collecte (10 connecteurs + réputation).
 - 2026-02 : v3 — Module 11 Jurisprudence (TF-IDF + LLM arguments), Amendement drafter, Comparateur multi-conventions, Mode Présentation 9 slides, RBL Detector, REJD complet 8 parties + filigrane. Tests : 17/17 backend pytest + 4/4 frontend flows.
+- 2026-02 : v4 — Simulateur lié au projet (baseline auto + diff), Journal d'audit (fire-and-forget), Partager le verdict (PDF 1 page + QR code), Suite Ahmed ELY Mustapha (VITAE-PUBLICA + DEBT-ANALYZER PRO stubs). Tests : **26/26 regression pytest** (v3+v4) + 5/5 frontend flows.

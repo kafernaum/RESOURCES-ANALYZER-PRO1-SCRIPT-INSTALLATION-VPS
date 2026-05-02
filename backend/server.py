@@ -19,7 +19,7 @@ from models import (
     UserCreate, UserLogin, UserPublic, TokenResponse,
     ProjectCreate, Project,
     Document, Analysis, FreeQueryRequest,
-    Diagnostic, ReportRequest, SimulatorRequest,
+    Diagnostic, ReportRequest, SimulatorRequest, SimulatorOverride,
 )
 from auth import hash_password, verify_password, create_token, get_current_user_id
 from extraction import extract_document
@@ -59,6 +59,8 @@ logger = logging.getLogger("rap")
 
 
 # -------- Helpers --------
+import asyncio
+
 async def _get_user(user_id: str):
     return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
@@ -70,19 +72,24 @@ async def _check_project(project_id: str, user_id: str):
     return proj
 
 
-async def _audit(user_id: str, action: str, project_id: str = None, meta: dict = None):
-    """Insert an audit log entry. Best-effort: never raise."""
+async def _audit_insert(doc):
     try:
-        await db.audit_log.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "project_id": project_id,
-            "action": action,
-            "meta": meta or {},
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        await db.audit_log.insert_one(doc)
     except Exception as e:
         logger.warning(f"audit log failed: {e}")
+
+
+def _audit(user_id: str, action: str, project_id: str = None, meta: dict = None):
+    """Fire-and-forget audit log entry. Never blocks or fails the caller."""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "project_id": project_id,
+        "action": action,
+        "meta": meta or {},
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    asyncio.create_task(_audit_insert(doc))
 
 
 # ============ ROOT ============
@@ -141,7 +148,7 @@ async def me(uid: str = Depends(get_current_user_id)):
 async def create_project(payload: ProjectCreate, uid: str = Depends(get_current_user_id)):
     proj = Project(user_id=uid, **payload.model_dump())
     await db.projects.insert_one(proj.model_dump())
-    await _audit(uid, "project_create", proj.id, {"name": proj.name})
+    _audit(uid, "project_create", proj.id, {"name": proj.name})
     return proj
 
 
@@ -162,7 +169,7 @@ async def delete_project(project_id: str, uid: str = Depends(get_current_user_id
     await db.projects.delete_one({"id": project_id, "user_id": uid})
     await db.documents.delete_many({"project_id": project_id})
     await db.analyses.delete_many({"project_id": project_id})
-    await _audit(uid, "project_delete", project_id)
+    _audit(uid, "project_delete", project_id)
     return {"deleted": True}
 
 
@@ -191,7 +198,7 @@ async def upload_document(
     # Save full raw text separately (large)
     doc_dict["_raw_text_full"] = raw_text[:200000]
     await db.documents.insert_one(doc_dict)
-    await _audit(uid, "document_upload", project_id, {"filename": file.filename, "size": len(content)})
+    _audit(uid, "document_upload", project_id, {"filename": file.filename, "size": len(content)})
     return doc
 
 
@@ -239,7 +246,7 @@ async def extract_document_data(document_id: str, uid: str = Depends(get_current
         {"id": document_id},
         {"$set": {"extracted_data": extracted, "quality_score": confidence}}
     )
-    await _audit(uid, "document_extract", d.get("project_id"), {"document_id": document_id, "confidence": confidence})
+    _audit(uid, "document_extract", d.get("project_id"), {"document_id": document_id, "confidence": confidence})
     return {"cached": False, "extracted_data": extracted, "quality_score": confidence}
 
 
@@ -431,7 +438,7 @@ async def generate_report(payload: ReportRequest, uid: str = Depends(get_current
         "bln": analyses.get("bln_confrontation") or {},
     }
     pdf_bytes = generate_pdf(proj, report_data, payload.preset)
-    await _audit(uid, "report_pdf_generated", payload.project_id, {"preset": payload.preset})
+    _audit(uid, "report_pdf_generated", payload.project_id, {"preset": payload.preset})
     safe_name = (proj.get("name") or "rapport").replace(" ", "_")[:40]
     fname = f"RAP_{payload.preset}_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
     return StreamingResponse(
@@ -1193,7 +1200,7 @@ async def generate_share_verdict_endpoint(
     share_base = os.environ.get("PUBLIC_APP_URL") or os.environ.get("CORS_ORIGINS", "").split(",")[0] or "https://app"
     share_url = f"{share_base.rstrip('/')}/projects/{payload.project_id}"
     pdf_bytes = generate_share_verdict(proj, report_data, share_url, user.get("email", ""))
-    await _audit(uid, "share_verdict_generated", payload.project_id, {"share_url": share_url})
+    _audit(uid, "share_verdict_generated", payload.project_id, {"share_url": share_url})
     safe_name = (proj.get("name") or "rapport").replace(" ", "_")[:40]
     fname = f"VERDICT_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
     return StreamingResponse(
@@ -1206,7 +1213,7 @@ async def generate_share_verdict_endpoint(
 # ============ SIMULATEUR LIÉ À UN PROJET ============
 @api.post("/projects/{project_id}/simulator/run")
 async def simulator_linked(
-    project_id: str, payload: dict, uid: str = Depends(get_current_user_id),
+    project_id: str, payload: SimulatorOverride, uid: str = Depends(get_current_user_id),
 ):
     """Run the simulator using a project's extracted data as baseline, and return
     a diff vs the current analysis (impact on royalties, part-État, manque à gagner)."""
@@ -1229,7 +1236,8 @@ async def simulator_linked(
         "production_annual": donf.get("production_annuelle_estimee") or 0,
         "price": donf.get("prix_reference") or 0,
     }
-    proposed = {**baseline_sim, **{k: float(v) for k, v in payload.items() if k in baseline_sim and v is not None}}
+    override = payload.model_dump(exclude_none=True)
+    proposed = {**baseline_sim, **override}
     base_res = simulate(baseline_sim)
     prop_res = simulate(proposed)
     # compute diff
@@ -1239,7 +1247,7 @@ async def simulator_linked(
         p = prop_res.get(k) or 0
         diff[k] = {"baseline": b, "proposed": p, "delta": round(p - b, 2),
                    "delta_pct": round(((p - b) / b * 100) if b else 0, 2)}
-    await _audit(uid, "simulator_linked_run", project_id, {"proposed": proposed})
+    _audit(uid, "simulator_linked_run", project_id, {"proposed": proposed})
     return {
         "project": proj,
         "baseline_input": baseline_sim,
@@ -1344,7 +1352,7 @@ async def suite_cross_check(project_id: str, uid: str = Depends(get_current_user
             ),
         },
     }
-    await _audit(uid, "suite_cross_check", project_id, {"vitae": vitae_ok, "debt": debt_ok})
+    _audit(uid, "suite_cross_check", project_id, {"vitae": vitae_ok, "debt": debt_ok})
     return result
 
 
