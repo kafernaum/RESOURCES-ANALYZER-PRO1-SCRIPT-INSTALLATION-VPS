@@ -22,7 +22,11 @@ export default function Login() {
       toast.success("Connexion réussie");
       nav("/dashboard");
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Identifiants invalides");
+      const d = err?.response?.data?.detail;
+      const msg = Array.isArray(d)
+        ? d.map((x) => `${x.loc?.slice(-1)[0] || ""}: ${x.msg}`).join(" · ")
+        : (d || err?.message || "Identifiants invalides (vérifiez votre connexion)");
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

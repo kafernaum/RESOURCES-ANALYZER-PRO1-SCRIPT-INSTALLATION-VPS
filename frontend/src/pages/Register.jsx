@@ -26,7 +26,11 @@ export default function Register() {
       toast.success("Compte créé. Bienvenue !");
       nav("/dashboard");
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Erreur lors de la création");
+      const d = err?.response?.data?.detail;
+      const msg = Array.isArray(d)
+        ? d.map((x) => `${x.loc?.slice(-1)[0] || ""}: ${x.msg}`).join(" · ")
+        : (d || err?.message || "Erreur lors de la création (vérifiez votre connexion)");
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
