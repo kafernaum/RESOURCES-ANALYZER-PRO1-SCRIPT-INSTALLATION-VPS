@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, API } from "../lib/api";
 import { Button } from "../components/ui/button";
 import {
-  ChevronLeft, ChevronRight, X, Maximize2, Loader2,
+  ChevronLeft, ChevronRight, X, Maximize2, Loader2, Share2,
   TrendingUp, AlertTriangle, FileWarning, Users, ScaleIcon, Scale, Trophy,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const COLORS = {
   primary: "#1B4332",
@@ -76,6 +77,30 @@ export default function Presentation() {
         </div>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs opacity-60">{idx + 1} / {data.slides.length}</span>
+          <Button size="sm" variant="ghost" onClick={async () => {
+            try {
+              const token = localStorage.getItem("rap_token");
+              const res = await fetch(`${API}/reports/generate-share-verdict`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ project_id: id, preset: "rejd" }),
+              });
+              if (!res.ok) throw new Error("Erreur");
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `verdict_${data.project?.name || id}_${Date.now()}.pdf`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success("Verdict partagé téléchargé");
+            } catch (err) {
+              toast.error("Erreur génération verdict");
+            }
+          }} className="text-white hover:bg-white/10" data-testid="present-share"
+            title="Partager le verdict (PDF 1 page + QR)">
+            <Share2 size={14} />
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => {
             if (document.fullscreenElement) document.exitFullscreen();
             else document.documentElement.requestFullscreen();

@@ -1,0 +1,39 @@
+{
+  "summary": "v4 testing complete — 9/9 backend pytest passing; all 5 frontend flows verified end-to-end on the preview URL. Backend: project-linked simulator (empty body → deltas=0, royalty=8 override → +21.1% part_etat_pct proposed vs baseline), audit log (default list, project filter, auto-populated on project_create), share-verdict PDF (valid %PDF- header, 8235 bytes, QR code/tagline embedded), suite status (2 apps vitae_publica+debt_analyzer with connected=false + status=not_configured), suite cross-check stub (vitae_publica + debt_analyzer message strings present), comparator now returns skipped_ids[] array. Frontend: /audit page renders with 20 rows + coloured action badges + functional search filter (9 'simulator' rows); ProjectDetail new tabs 'Simulateur' (auto-loads baseline + Simuler button renders 4 diff cards with ↗ +21.1% delta) and 'Suite' (2 apps shown as 'NON CONFIGURÉ' with VITAE-PUBLICA + DEBT-ANALYZER PRO names, cross-check renders 2-column stub); ReportsPanel hero 'Partager le verdict' with NOUVEAU gold badge downloads PDF (8235 B); /projects/{id}/presentation Share2 icon downloads the same verdict PDF. No console errors, no overlay/z-index issues, all data-testids resolvable.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/reports/generate-share-verdict", "issue": "ReportRequest.preset is a Literal that doesn't include 'share' — a frontend or test passing preset='share' gets a 422. Consider adding 'share' to the Literal or making preset Optional for this endpoint since preset is not meaningfully used for the share-verdict."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v4.py",
+    "/app/test_reports/pytest/pytest_v4_results.xml"
+  ],
+  "action_items": [
+    "Consider relaxing ReportRequest.preset Literal for the share-verdict endpoint (currently rejects any preset outside {parlementaire, juridique, citoyen, environnemental, renegociation, comparatif, rejd}). Frontend ReportsPanel already passes a valid preset so UI is not impacted, but future callers/doc examples may hit 422.",
+    "server.py now 1365 lines (grew from 1168). Refactor into routers becomes more urgent (auth.py, projects.py, simulator.py, audit.py, suite.py, reports.py, ...). Hot-reload on a monolithic file of this size is already noticeably slower."
+  ],
+  "critical_code_review_comments": [
+    "_audit helper is awaited inline in every endpoint — good for atomicity but any db.audit_log write failure will bubble up to the caller and fail the user-facing request. Consider fire-and-forget (asyncio.create_task) with an error log, so an audit hiccup cannot break a successful simulator run or project create.",
+    "Simulator-linked endpoint: payload is declared as dict, which bypasses Pydantic validation — a user posting royalty_rate='abc' will crash with a TypeError inside simulate() rather than returning a 400. Introduce a SimulatorOverride pydantic model with Optional[float] fields.",
+    "Share-verdict PDF share_url fallback chain uses CORS_ORIGINS[0] which can be '*' (then the URL becomes 'https://*/projects/...' which is user-visible inside the QR code). Add a stricter fallback or explicit PUBLIC_APP_URL requirement.",
+    "Suite cross-check returns proj object inline which may contain mongo-flavoured fields if _check_project doesn't strip them — verify (spot-check showed no _id leaks but the code path is not defensive).",
+    "AuditLog.jsx filter is purely client-side (action/project_name/details substring). Fine for <=200 entries; once users accumulate >500 entries the limit=200 default will hide older matches. Consider server-side filter when searchable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v4.py (new — 9 tests covering simulator, audit, share-verdict PDF, suite status+cross-check stub, comparator skipped_ids)"
+  ],
+  "success_rate": {"backend": "100% (9/9 v4 tests)", "frontend": "100% on all 5 v4 surfaces tested"},
+  "test_credentials": "smoke@example.com / smoke123 (pre-analysed project f6df361a-0371-4797-ad46-d05bdfd614be).",
+  "seed_data_creation": "Each test creates and deletes its own TEST_-prefixed project where needed (TEST_audit_*, TEST_cmp4_*). Audit log accumulates ~9 simulator entries per full test run under the smoke user — expected and desired (audit is append-only by design).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "v3 + v4 endpoints and UIs are all working. test_v3.py (17 tests) + test_v4.py (9 tests) = 26 regression tests covering jurisprudence, amendment, comparator, presentation, RBL, REJD-complete, simulator-linked, audit log, share-verdict PDF, suite stubs. No env vars set for VITAE_PUBLICA_URL/TOKEN or DEBT_ANALYZER_URL/TOKEN — stub path is expected and tested. The simulator baseline for the smoke project comes from the most recent extracted document (taux_royalties=4, prod=350000, price=1800); if a new document is uploaded or extracted_data is replaced, the baseline will change — tests assert delta direction (>0) rather than hard values where possible. EMERGENT_LLM_KEY budget appeared healthy during this run.",
+  "rca_of_the_issue": "N/A — no bugs found. One minor test fix applied (ReportRequest.preset Literal does not accept 'share'; used 'rejd' instead since the endpoint ignores preset for share-verdict rendering). All 7 new backend endpoints + 5 new UI surfaces behave exactly as specified in the review request."
+}

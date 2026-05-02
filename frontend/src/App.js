@@ -21,6 +21,7 @@ import ConventionModels from "@/pages/ConventionModels";
 import Comparator from "@/pages/Comparator";
 import Jurisprudence from "@/pages/Jurisprudence";
 import Presentation from "@/pages/Presentation";
+import AuditLog from "@/pages/AuditLog";
 import Placeholder from "@/pages/Placeholder";
 
 function App() {
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/comparator" element={<Comparator />} />
                 <Route path="/models" element={<ConventionModels />} />
                 <Route path="/glossary" element={<Glossary />} />
+                <Route path="/audit" element={<AuditLog />} />
                 <Route path="/settings" element={<Placeholder title="Paramètres" subtitle="Profil utilisateur et préférences." testid="settings-page" />} />
               </Route>
 

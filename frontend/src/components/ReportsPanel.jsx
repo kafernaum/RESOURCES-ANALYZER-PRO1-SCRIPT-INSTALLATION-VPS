@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { api, API } from "../lib/api";
-import { Download, FileBarChart, Loader2, Building, Scale, Users, Sprout, RefreshCw, Award, FileType, FileSpreadsheet, Archive } from "lucide-react";
+import { Download, FileBarChart, Loader2, Building, Scale, Users, Sprout, RefreshCw, Award, FileType, FileSpreadsheet, Archive, Share2, QrCode } from "lucide-react";
 import { toast } from "sonner";
 
 const PRESETS = [
@@ -38,11 +38,12 @@ export default function ReportsPanel({ projectId, hasData }) {
   const generate = async (preset, format = "pdf") => {
     setBusy(`${preset}-${format}`);
     try {
-      const ext = { pdf: "pdf", word: "docx", excel: "xlsx", zip: "zip", "rejd-complete": "pdf" }[format];
+      const ext = { pdf: "pdf", word: "docx", excel: "xlsx", zip: "zip", "rejd-complete": "pdf", "share-verdict": "pdf" }[format];
       const path = format === "word" ? "/reports/generate-word"
                 : format === "excel" ? "/reports/generate-excel"
                 : format === "zip" ? "/reports/generate-zip"
                 : format === "rejd-complete" ? "/reports/generate-rejd-complete"
+                : format === "share-verdict" ? "/reports/generate-share-verdict"
                 : "/reports/generate";
       await downloadFile(path, { project_id: projectId, preset },
         `rapport_${preset}_${format}_${Date.now()}.${ext}`);
@@ -69,6 +70,34 @@ export default function ReportsPanel({ projectId, hasData }) {
         <h2 className="font-display text-lg font-bold mb-1">Rapports exportables</h2>
         <p className="text-xs opacity-70">Choisissez le preset adapté à votre destinataire. PDF, Word éditable, Excel multi-onglets ou Pack ZIP complet (REJD).</p>
       </div>
+
+      <div className="rap-card p-5" style={{ background: "linear-gradient(135deg, rgba(212,160,23,0.08), rgba(26,60,94,0.08))", borderColor: "rgba(212,160,23,0.4)" }}>
+        <div className="flex items-start gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Share2 size={18} style={{ color: "#D4A017" }} />
+              <h3 className="font-display font-bold">Partager le verdict</h3>
+              <span className="text-[9px] uppercase tracking-[0.2em] px-2 py-0.5 rounded-sm font-semibold"
+                style={{ background: "#D4A017", color: "#0D1B12" }}>NOUVEAU</span>
+            </div>
+            <p className="text-xs opacity-80 mb-3 leading-relaxed">
+              Mini-rapport PDF 1 page : score global, 3 alertes phares, impact économique, QR code
+              vers l'analyse complète. Idéal pour députés, journalistes, thread Twitter.
+            </p>
+            <Button onClick={() => generate("rejd", "share-verdict")}
+              disabled={busy === "rejd-share-verdict"}
+              className="rounded-sm font-semibold"
+              style={{ background: "#D4A017", color: "#0D1B12" }}
+              data-testid="gen-share-verdict">
+              {busy === "rejd-share-verdict"
+                ? <Loader2 size={12} className="mr-1 animate-spin" />
+                : <QrCode size={12} className="mr-1" />}
+              Générer le PDF de partage
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-3">
         {PRESETS.map((p) => (
           <div key={p.id}

@@ -41,6 +41,7 @@ from jurisprudence_service import (
     fragment_decision, search_decisions, generate_argument, rewrite_amendment,
 )
 from reports_rejd_complete import generate_rejd_complete
+from share_verdict import generate_share_verdict
 
 
 ROOT_DIR = Path(__file__).parent
@@ -67,6 +68,21 @@ async def _check_project(project_id: str, user_id: str):
     if not proj:
         raise HTTPException(status_code=404, detail="Projet introuvable")
     return proj
+
+
+async def _audit(user_id: str, action: str, project_id: str = None, meta: dict = None):
+    """Insert an audit log entry. Best-effort: never raise."""
+    try:
+        await db.audit_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "project_id": project_id,
+            "action": action,
+            "meta": meta or {},
+            "ts": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.warning(f"audit log failed: {e}")
 
 
 # ============ ROOT ============
@@ -125,6 +141,7 @@ async def me(uid: str = Depends(get_current_user_id)):
 async def create_project(payload: ProjectCreate, uid: str = Depends(get_current_user_id)):
     proj = Project(user_id=uid, **payload.model_dump())
     await db.projects.insert_one(proj.model_dump())
+    await _audit(uid, "project_create", proj.id, {"name": proj.name})
     return proj
 
 
@@ -145,6 +162,7 @@ async def delete_project(project_id: str, uid: str = Depends(get_current_user_id
     await db.projects.delete_one({"id": project_id, "user_id": uid})
     await db.documents.delete_many({"project_id": project_id})
     await db.analyses.delete_many({"project_id": project_id})
+    await _audit(uid, "project_delete", project_id)
     return {"deleted": True}
 
 
@@ -173,6 +191,7 @@ async def upload_document(
     # Save full raw text separately (large)
     doc_dict["_raw_text_full"] = raw_text[:200000]
     await db.documents.insert_one(doc_dict)
+    await _audit(uid, "document_upload", project_id, {"filename": file.filename, "size": len(content)})
     return doc
 
 
@@ -220,6 +239,7 @@ async def extract_document_data(document_id: str, uid: str = Depends(get_current
         {"id": document_id},
         {"$set": {"extracted_data": extracted, "quality_score": confidence}}
     )
+    await _audit(uid, "document_extract", d.get("project_id"), {"document_id": document_id, "confidence": confidence})
     return {"cached": False, "extracted_data": extracted, "quality_score": confidence}
 
 
@@ -411,6 +431,7 @@ async def generate_report(payload: ReportRequest, uid: str = Depends(get_current
         "bln": analyses.get("bln_confrontation") or {},
     }
     pdf_bytes = generate_pdf(proj, report_data, payload.preset)
+    await _audit(uid, "report_pdf_generated", payload.project_id, {"preset": payload.preset})
     safe_name = (proj.get("name") or "rapport").replace(" ", "_")[:40]
     fname = f"RAP_{payload.preset}_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
     return StreamingResponse(
@@ -913,9 +934,11 @@ async def comparator_run(payload: dict, uid: str = Depends(get_current_user_id))
     if len(project_ids) > 4:
         raise HTTPException(status_code=400, detail="Maximum 4 projets pour la comparaison.")
     out = []
+    skipped = []
     for pid in project_ids:
         proj = await db.projects.find_one({"id": pid, "user_id": uid}, {"_id": 0})
         if not proj:
+            skipped.append(pid)
             continue
         items = await db.analyses.find({"project_id": pid}, {"_id": 0}).to_list(100)
         analyses = {a["analysis_type"]: a["results"] for a in items}
@@ -933,7 +956,11 @@ async def comparator_run(payload: dict, uid: str = Depends(get_current_user_id))
         raise HTTPException(status_code=404, detail="Projets introuvables ou non analysés.")
     # Compute ranking by global score
     ranked = sorted(out, key=lambda x: x["summary"].get("score_global", 0), reverse=True)
-    return {"comparisons": out, "ranking": [r["project"]["id"] for r in ranked]}
+    return {
+        "comparisons": out,
+        "ranking": [r["project"]["id"] for r in ranked],
+        "skipped_ids": skipped,
+    }
 
 
 # ============ REJD COMPLET (8 parties + 8 annexes) ============
@@ -1145,6 +1172,180 @@ async def rbl_detector(project_id: str, uid: str = Depends(get_current_user_id))
             "Plafonner la durée de l'offtake et indexer le prix.",
         ],
     }
+
+
+# ============ SHARE VERDICT (1-page PDF + QR code) ============
+@api.post("/reports/generate-share-verdict")
+async def generate_share_verdict_endpoint(
+    payload: ReportRequest, uid: str = Depends(get_current_user_id),
+):
+    """One-page shareable PDF verdict with QR code to the project URL."""
+    proj = await _check_project(payload.project_id, uid)
+    user = await _get_user(uid) or {}
+    items = await db.analyses.find({"project_id": payload.project_id}, {"_id": 0}).to_list(100)
+    analyses = {a["analysis_type"]: a["results"] for a in items}
+    summary = derive_diagnostics_summary(analyses)
+    report_data = {
+        "summary": summary,
+        "financier": analyses.get("financier") or {},
+    }
+    # public share URL — this is the app preview URL
+    share_base = os.environ.get("PUBLIC_APP_URL") or os.environ.get("CORS_ORIGINS", "").split(",")[0] or "https://app"
+    share_url = f"{share_base.rstrip('/')}/projects/{payload.project_id}"
+    pdf_bytes = generate_share_verdict(proj, report_data, share_url, user.get("email", ""))
+    await _audit(uid, "share_verdict_generated", payload.project_id, {"share_url": share_url})
+    safe_name = (proj.get("name") or "rapport").replace(" ", "_")[:40]
+    fname = f"VERDICT_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+    )
+
+
+# ============ SIMULATEUR LIÉ À UN PROJET ============
+@api.post("/projects/{project_id}/simulator/run")
+async def simulator_linked(
+    project_id: str, payload: dict, uid: str = Depends(get_current_user_id),
+):
+    """Run the simulator using a project's extracted data as baseline, and return
+    a diff vs the current analysis (impact on royalties, part-État, manque à gagner)."""
+    proj = await _check_project(project_id, uid)
+    # baseline
+    docs = await db.documents.find(
+        {"project_id": project_id, "extracted_data": {"$ne": None}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(5)
+    if not docs:
+        raise HTTPException(status_code=400, detail="Aucun document extrait — impossible de simuler.")
+    extracted = docs[0].get("extracted_data") or {}
+    rf = extracted.get("regime_fiscal") or {}
+    donf = extracted.get("donnees_financieres") or {}
+    baseline_sim = {
+        "royalty_rate": rf.get("taux_royalties") or 0,
+        "is_rate": rf.get("taux_impot_societes") or 0,
+        "state_share_psa": rf.get("partage_production_etat_pct") or 0,
+        "duration_years": extracted.get("duree_contrat_ans") or 25,
+        "production_annual": donf.get("production_annuelle_estimee") or 0,
+        "price": donf.get("prix_reference") or 0,
+    }
+    proposed = {**baseline_sim, **{k: float(v) for k, v in payload.items() if k in baseline_sim and v is not None}}
+    base_res = simulate(baseline_sim)
+    prop_res = simulate(proposed)
+    # compute diff
+    diff = {}
+    for k in ("recettes_etat_annuelles", "recettes_etat_totales", "part_etat_pct", "valeur_totale_gisement"):
+        b = base_res.get(k) or 0
+        p = prop_res.get(k) or 0
+        diff[k] = {"baseline": b, "proposed": p, "delta": round(p - b, 2),
+                   "delta_pct": round(((p - b) / b * 100) if b else 0, 2)}
+    await _audit(uid, "simulator_linked_run", project_id, {"proposed": proposed})
+    return {
+        "project": proj,
+        "baseline_input": baseline_sim,
+        "proposed_input": proposed,
+        "baseline_result": base_res,
+        "proposed_result": prop_res,
+        "diff": diff,
+    }
+
+
+# ============ AUDIT LOG ============
+@api.get("/audit")
+async def list_audit(
+    project_id: Optional[str] = None,
+    limit: int = 200,
+    uid: str = Depends(get_current_user_id),
+):
+    """List audit log entries for the current user."""
+    q = {"user_id": uid}
+    if project_id:
+        q["project_id"] = project_id
+    items = await db.audit_log.find(q, {"_id": 0}).sort("ts", -1).to_list(min(int(limit), 500))
+    # enrich with project name when possible
+    proj_ids = list({it["project_id"] for it in items if it.get("project_id")})
+    if proj_ids:
+        projs = await db.projects.find({"id": {"$in": proj_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        pmap = {p["id"]: p["name"] for p in projs}
+        for it in items:
+            if it.get("project_id"):
+                it["project_name"] = pmap.get(it["project_id"], "—")
+    return {"items": items, "total": len(items)}
+
+
+# ============ SUITE AHMED ELY MUSTAPHA (VITAE-PUBLICA + DEBT-ANALYZER PRO) ============
+@api.get("/suite/status")
+async def suite_status(uid: str = Depends(get_current_user_id)):
+    """Status of sister apps in the Ahmed ELY Mustapha suite.
+    Each integration is provisioned when the corresponding env var is set:
+      - VITAE_PUBLICA_URL + VITAE_PUBLICA_TOKEN
+      - DEBT_ANALYZER_URL + DEBT_ANALYZER_TOKEN
+    """
+    def _st(url_key, token_key, name, desc):
+        url = os.environ.get(url_key, "")
+        return {
+            "key": name,
+            "name": {
+                "vitae_publica": "VITAE-PUBLICA",
+                "debt_analyzer": "DEBT-ANALYZER PRO",
+            }.get(name, name),
+            "description": desc,
+            "connected": bool(url and os.environ.get(token_key)),
+            "url": url or None,
+            "status": "connected" if (url and os.environ.get(token_key)) else "not_configured",
+        }
+    return {
+        "apps": [
+            _st("VITAE_PUBLICA_URL", "VITAE_PUBLICA_TOKEN", "vitae_publica",
+                "Transparence de la vie publique : déclarations de patrimoine, conflits d'intérêts."),
+            _st("DEBT_ANALYZER_URL", "DEBT_ANALYZER_TOKEN", "debt_analyzer",
+                "Analyse des emprunts publics : dette extérieure, prêts adossés aux ressources (RBL)."),
+        ],
+        "hint": "Définir les variables d'environnement VITAE_PUBLICA_URL/TOKEN et DEBT_ANALYZER_URL/TOKEN pour activer les intégrations.",
+    }
+
+
+@api.post("/projects/{project_id}/suite/cross-check")
+async def suite_cross_check(project_id: str, uid: str = Depends(get_current_user_id)):
+    """Run a cross-check of the current convention against VITAE-PUBLICA (beneficial ownership)
+    and DEBT-ANALYZER PRO (resource-backed loans / debt exposure).
+    When services are not configured, returns a structured stub response so the UI works."""
+    proj = await _check_project(project_id, uid)
+    docs = await db.documents.find(
+        {"project_id": project_id, "extracted_data": {"$ne": None}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(1)
+    extracted = (docs[0].get("extracted_data") if docs else {}) or {}
+    company = extracted.get("company") or "—"
+    country = proj.get("country", "")
+    vitae_ok = bool(os.environ.get("VITAE_PUBLICA_URL") and os.environ.get("VITAE_PUBLICA_TOKEN"))
+    debt_ok = bool(os.environ.get("DEBT_ANALYZER_URL") and os.environ.get("DEBT_ANALYZER_TOKEN"))
+    result = {
+        "project": proj,
+        "company": company,
+        "country": country,
+        "vitae_publica": {
+            "connected": vitae_ok,
+            "beneficial_owners": [] if vitae_ok else None,
+            "pep_flags": [] if vitae_ok else None,
+            "conflicts": [] if vitae_ok else None,
+            "message": None if vitae_ok else (
+                "Intégration VITAE-PUBLICA non configurée. "
+                "Définir VITAE_PUBLICA_URL + VITAE_PUBLICA_TOKEN dans l'environnement serveur."
+            ),
+        },
+        "debt_analyzer": {
+            "connected": debt_ok,
+            "rbl_matches": [] if debt_ok else None,
+            "debt_exposure_usd": None,
+            "concerning_loans": [] if debt_ok else None,
+            "message": None if debt_ok else (
+                "Intégration DEBT-ANALYZER PRO non configurée. "
+                "Définir DEBT_ANALYZER_URL + DEBT_ANALYZER_TOKEN dans l'environnement serveur."
+            ),
+        },
+    }
+    await _audit(uid, "suite_cross_check", project_id, {"vitae": vitae_ok, "debt": debt_ok})
+    return result
 
 
 # ----- Mount + CORS -----

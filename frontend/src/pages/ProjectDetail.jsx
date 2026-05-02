@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import {
   Upload, FileText, Loader2, CheckCircle2, AlertCircle, Sparkles,
   Scale, FileSearch, BarChart3, FileBarChart, AlertTriangle, MessageSquareText, Sliders,
-  BookOpen, Globe, Presentation, Wand2, ShieldAlert,
+  BookOpen, Globe, Presentation, Wand2, ShieldAlert, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import LegalDisclaimer from "../components/LegalDisclaimer";
@@ -22,6 +22,8 @@ import CollectionPanel from "../components/CollectionPanel";
 import JurisprudencePanel from "../components/JurisprudencePanel";
 import AmendmentDrafter from "../components/AmendmentDrafter";
 import RblDetector from "../components/RblDetector";
+import ProjectSimulator from "../components/ProjectSimulator";
+import SuiteConnect from "../components/SuiteConnect";
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -170,6 +172,8 @@ export default function ProjectDetail() {
           <TabsTrigger value="diagnostics" data-testid="tab-diagnostics"><AlertTriangle size={14} className="mr-1" />Diagnostics</TabsTrigger>
           <TabsTrigger value="amendments" data-testid="tab-amendments"><Wand2 size={14} className="mr-1" />Amendements</TabsTrigger>
           <TabsTrigger value="rbl" data-testid="tab-rbl"><ShieldAlert size={14} className="mr-1" />RBL</TabsTrigger>
+          <TabsTrigger value="simulator" data-testid="tab-simulator"><Sliders size={14} className="mr-1" />Simulateur</TabsTrigger>
+          <TabsTrigger value="suite" data-testid="tab-suite"><Link2 size={14} className="mr-1" />Suite</TabsTrigger>
           <TabsTrigger value="collection" data-testid="tab-collection"><Globe size={14} className="mr-1" />Collecte auto</TabsTrigger>
           <TabsTrigger value="freequery" data-testid="tab-freequery"><MessageSquareText size={14} className="mr-1" />Requête libre</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports"><FileBarChart size={14} className="mr-1" />Rapports</TabsTrigger>
@@ -319,6 +323,14 @@ export default function ProjectDetail() {
 
         <TabsContent value="rbl" className="mt-4">
           <RblDetector projectId={id} />
+        </TabsContent>
+
+        <TabsContent value="simulator" className="mt-4">
+          <ProjectSimulator projectId={id} />
+        </TabsContent>
+
+        <TabsContent value="suite" className="mt-4">
+          <SuiteConnect projectId={id} />
         </TabsContent>
 
         <TabsContent value="collection" className="mt-4">

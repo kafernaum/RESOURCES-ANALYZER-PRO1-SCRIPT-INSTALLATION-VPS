@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Home, FolderKanban, Plus, FileText, BookOpen, Scale, Landmark,
-  Search, AlertTriangle, BarChart3, FileBarChart, Globe, Settings,
+  Search, AlertTriangle, BarChart3, FileBarChart, Globe, Settings, Shield,
   HelpCircle, Sliders, GitCompareArrows, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import Logo from "./Logo";
@@ -23,6 +23,7 @@ const NAV = [
   { to: "/simulator", label: "Simulateur de renégociation", icon: Sliders, testid: "nav-simulator" },
   { to: "/comparator", label: "Comparateur multi-conventions", icon: GitCompareArrows, testid: "nav-comparator" },
   { to: "/models", label: "Conventions modèles", icon: GitCompareArrows, testid: "nav-models" },
+  { to: "/audit", label: "Journal d'audit", icon: Shield, testid: "nav-audit" },
   { to: "/glossary", label: "Glossaire", icon: HelpCircle, testid: "nav-glossary" },
 ];
 
